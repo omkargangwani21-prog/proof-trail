@@ -14,3 +14,9 @@
 - `disputed_transactions[0].seller_transaction_id` equals the capture id of our sandbox order; this is the join key to our `orders` table.
 - A fund hold appears in `fund_movements` (`HOLD_PLACED`).
 - Buyer text appears in `messages[].content` and in `evidences[]` entries with `source` = `SUBMITTED_BY_BUYER`. Both are untrusted.
+
+## 2026-11-06: Drafter prompt v1 -> v2 (dev-set finding)
+- First real run (DeepSeek-V4-Flash, 1 dev case): the claim mentioned the carrier but cited only status, timestamp and tracking number. L2 flagged `carrier` as "in the cited record but not in the cited field" -> NEEDS_REVIEW -> final ABSTAIN (a false abstain).
+- Fix: prompt v2 requires a citation for every date, amount, carrier, tracking number or status mentioned in a claim.
+- Verifier behavior unchanged. Seeded fabricated claim was REMOVED at L2 in the same run.
+- Prompt changes are allowed only on the dev set. The test set must be frozen before the final eval and prompts are then fixed.

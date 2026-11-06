@@ -1,9 +1,9 @@
 import json, os, re
 from core.schemas import Draft
 
-PROMPT_VERSION = "drafter_v1"
+PROMPT_VERSION = "drafter_v2"
 _HERE = os.path.dirname(__file__)
-SYSTEM = open(os.path.join(_HERE, "prompts", "drafter_v1.md")).read()
+SYSTEM = open(os.path.join(_HERE, "prompts", "drafter_v2.md")).read()
 
 
 def _esc(s):
