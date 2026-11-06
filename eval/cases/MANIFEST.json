@@ -1,0 +1,11 @@
+{
+  "note": "All cases are synthetic. Test split must not be used for tuning.",
+  "counts": {
+    "dev": 20,
+    "test": 40
+  },
+  "sha256": {
+    "dev": "8654e62b719d5879b172d54d8a091dabe2a068a6dc1a75165dcf501cc9532ae2",
+    "test": "17c06d7437d9d6df62e63e43d1148f402532ad8f3beabee01c4c5a158c650e50"
+  }
+}
