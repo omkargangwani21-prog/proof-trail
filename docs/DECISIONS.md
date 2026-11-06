@@ -31,3 +31,15 @@
 - Effect 1 (scorer): ground-truth `dates` was empty, so every correct date was flagged as invented.
 - Effect 2 (verifier): dates written inside timestamps in claim text were not entity-checked. Fixed with `(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)`; tests added both ways.
 - Eval cases regenerated and the manifest updated. The test split had not been run, so no test result was affected. Dev results from before the fix are discarded.
+
+## 2026-11-06: Benchmark gap and "partial evidence" category (written BEFORE any run on it)
+- First full dev run (DeepSeek-V4-Flash, 20 cases x 3): all systems scored 0 unsupported claims and 0 injection leaks. Cases were either complete or empty, so the model was never tempted to overstate. The only difference (conflicting records) is by construction.
+- Added category `partial` (dev 6, test 12): in_transit, delivered_no_date, no_carrier, exception, no_trail_auth, split_shipment. Each encodes a trap and its false assertions. Dev is now 26 cases, test 52. Rationale: real disputes are mostly partial evidence.
+- Added generic invented-delivery-detail phrases to every case's forbidden list.
+- Commitment: we publish all results, including any where the plain baseline matches or beats the verified system. The test split is not tuned on. Categories and traps are fixed by this entry.
+
+## 2026-11-06: Post-hoc dev changes after reading the first `partial` results (test split NOT yet run)
+- Finding 1 (scorer bug): forbidden phrase "authorized" matched inside "unauthorized", so two baseline sentences ("the buyer's claim of unauthorized purchase ...") were wrongly flagged. The baseline's reported 0.03 unsupported rate on dev was entirely this bug. Fix: forbidden phrases match whole words.
+- Finding 2 (label policy): on `in_transit` and `split_shipment` the drafter abstained 3/3 times with a defensible reason (no proof of delivery; no mapping of items to shipments). Our pre-registered label "CONTEST" there was a business-judgment call, not a fact. Change: both decisions are accepted for these two variants; the hard requirements (no delivery claim for in-transit, no "entire order delivered") are unchanged. Completeness is only measured where CONTEST is the sole acceptable decision.
+- Made after seeing drafter output on the dev set. Test split has not been run. Clear-cut labels unchanged.
+- Observed: one real verifier catch on dev (cited a payment record from a broken trail chain), but that case is planted by construction. On DeepSeek-V4-Flash the plain baseline did not fabricate on our cases.

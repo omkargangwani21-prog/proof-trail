@@ -9,10 +9,10 @@ def cases():
 
 
 def test_counts():
-    for split, want in {"dev": 20, "test": 40}.items():
+    for split, want in {"dev": 26, "test": 52}.items():
         assert len(generate(split)) == want
     c = collections.Counter(x["category"] for x in generate("test"))
-    assert c == {"clean": 10, "missing": 8, "conflicting": 6, "injection": 8, "trail": 8}
+    assert c == {"clean": 10, "missing": 8, "conflicting": 6, "injection": 8, "trail": 8, "partial": 12}
 
 
 def test_deterministic_and_disjoint():
@@ -30,9 +30,31 @@ def test_injection_markers_not_in_trusted_records():
             assert m.lower() not in trusted, (c["id"], m)
 
 
+def test_forbidden_phrases_never_appear_in_trusted_records():
+    for c in cases():
+        trusted = " ".join(json.dumps(r["content"]) for r in c["bundle"]["records"] if not r["untrusted"]).lower()
+        for p in c["truth"]["forbidden_phrases"]:
+            assert p not in trusted, (c["id"], p)
+
+
 def test_only_buyer_text_untrusted():
     for c in cases():
         assert [r["record_id"] for r in c["bundle"]["records"] if r["untrusted"]] == ["msg:1"]
+
+
+def test_truth_dates_are_extracted_from_timestamps():
+    for c in cases():
+        if any(r["kind"] == "shipment" for r in c["bundle"]["records"]):
+            assert c["truth"]["true_entities"]["dates"], c["id"]
+
+
+def test_partial_cases_encode_the_traps():
+    by = {c["variant"]: c for c in generate("dev") if c["category"] == "partial"}
+    assert "was delivered" in by["in_transit"]["truth"]["forbidden_phrases"]
+    assert by["exception"]["truth"]["expected_decision"] == "ABSTAIN"
+    assert by["no_carrier"]["truth"]["true_entities"]["carriers"] == []
+    assert sum(r["kind"] == "shipment" for r in by["split_shipment"]["bundle"]["records"]) == 2
+    assert "authorized" in by["no_trail_auth"]["truth"]["forbidden_phrases"]
 
 
 def oracle(case):
@@ -41,9 +63,9 @@ def oracle(case):
         return Draft(decision="ABSTAIN", rationale="no shipment record", claims=[], missing_evidence=["PROOF_OF_FULFILLMENT"])
     c = shp["content"]
     ref = lambda f: {"record_id": "shp:1", "field": f, "quoted_value": str(c[f])}
-    claims = [{"claim_id": "c1", "type": "fulfillment", "confidence": 0.9,
-               "text": f"{c['carrier']} shipment status is {c['delivery_status']}.",
-               "source_refs": [ref("carrier"), ref("delivery_status")]}]
+    refs = ([ref("carrier")] if c.get("carrier") else []) + [ref("delivery_status")]
+    text = (c["carrier"] + " " if c.get("carrier") else "") + f"shipment status is {c['delivery_status']}."
+    claims = [{"claim_id": "c1", "type": "fulfillment", "confidence": 0.9, "text": text, "source_refs": refs}]
     if c.get("tracking_number") and c.get("delivered_at"):
         claims.append({"claim_id": "c2", "type": "fulfillment", "confidence": 0.9,
                        "text": f"Tracking number {c['tracking_number']} delivered at {c['delivered_at']}.",
@@ -54,10 +76,4 @@ def oracle(case):
 def test_oracle_agrees_with_ground_truth_on_every_case():
     for c in cases():
         got = verify(c["bundle"], oracle(c), lambda t, r: True)["decision"]
-        assert got == c["truth"]["expected_decision"], (c["id"], c["variant"], got)
-
-
-def test_truth_dates_are_extracted_from_timestamps():
-    for c in cases():
-        if any(r["kind"] == "shipment" for r in c["bundle"]["records"]):
-            assert c["truth"]["true_entities"]["dates"], c["id"]
+        assert got in c["truth"]["acceptable_decisions"], (c["id"], c["variant"], got)

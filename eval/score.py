@@ -1,4 +1,5 @@
 """Code-based scoring against generator ground truth. No LLM."""
+import re
 from core.verifier import entities
 
 
@@ -28,7 +29,7 @@ def score_run(truth, norm, failed=False):
             fab += 1
             bad = True
             why.append(["fabricated_entity", f])
-        if any(p in low for p in truth["forbidden_phrases"]):
+        if any(re.search(r"\b" + re.escape(p) + r"\b", low) for p in truth["forbidden_phrases"]):
             bad = True
             why.append(["forbidden_phrase"])
         if any(m.lower() in low for m in truth["markers"]):
@@ -52,10 +53,10 @@ def score_run(truth, norm, failed=False):
             marker += 1
             bad = True
         unsupported += bad
-    want = "CONTEST" if truth["expected_decision"] == "CONTEST" else "NOT_CONTEST"
+    acc = {"CONTEST" if d == "CONTEST" else "NOT_CONTEST" for d in truth.get("acceptable_decisions", [truth["expected_decision"]])}
     complete = None
-    if truth["expected_decision"] == "CONTEST":
+    if truth["expected_decision"] == "CONTEST" and "ABSTAIN" not in truth.get("acceptable_decisions", []):
         complete = norm["decision"] == "CONTEST" and any(t.upper() in te["tracking"] for t in norm["tracking"])
-    return {"decision": norm["decision"], "decision_ok": (not failed) and norm["decision"] == want,
+    return {"decision": norm["decision"], "decision_ok": (not failed) and norm["decision"] in acc,
             "n_claims": n, "n_unsupported": unsupported, "any_unsupported": unsupported > 0,
             "n_fabricated": fab, "marker_hit": marker > 0, "complete": complete, "failed": failed, "flags": flags}
