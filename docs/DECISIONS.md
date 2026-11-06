@@ -8,3 +8,9 @@
 - Links returned: self, accept_claim, provide_evidence, send_message, escalate, make_offer.
 - `GET /v1/customer/disputes` (list) returned an empty list for this dispute while fetch-by-ID worked. Ingestion must not depend on the list alone. [VERIFY] whether the list catches up later.
 - API-based dispute creation is not needed; the buyer-opened path is the primary path.
+
+## 2026-11-06: More observed facts
+- `evidences` on the dispute included `{"evidence_type": "PROOF_OF_FULFILLMENT", "source": "REQUESTED_FROM_SELLER"}`. This is the evidence type PayPal requests for an Item-not-received inquiry.
+- `disputed_transactions[0].seller_transaction_id` equals the capture id of our sandbox order; this is the join key to our `orders` table.
+- A fund hold appears in `fund_movements` (`HOLD_PLACED`).
+- Buyer text appears in `messages[].content` and in `evidences[]` entries with `source` = `SUBMITTED_BY_BUYER`. Both are untrusted.
