@@ -1,7 +1,13 @@
-import re, json
+import re, json, datetime
 
 BLAME = re.compile(r"\b(liar|lying|lies|lied|fraud|fraudster|fraudulent|scam|scammer|dishonest|cheat|cheating|thief|stole)\b", re.I)
-REQUIRED_MAP = {"PROOF_OF_FULFILLMENT": ("fulfillment", "shipment")}  # evidence type -> (claim type, record kind)
+def _shipped(c):
+    return bool(c.get("tracking_number")) and bool(c.get("shipped_at")) and \
+        c.get("delivery_status") in ("IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED")
+
+
+# evidence type -> (claim type, record kind, predicate the cited RECORD must satisfy)
+REQUIRED_MAP = {"PROOF_OF_FULFILLMENT": ("fulfillment", "shipment", _shipped)}
 FACTUAL = {"fulfillment", "authorization", "policy", "history"}
 CARRIERS = ("ups", "fedex", "usps", "dhl")
 DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
@@ -67,6 +73,11 @@ def check_claim(claim, recs, trusted_text):
             review.append(f"L2: {kind} '{val}' is only in a different record")
         else:
             return "REMOVED", [f"L2: {kind} '{val}' appears in no trusted record"]
+    for r in claim.source_refs:
+        rc = recs[r.record_id]
+        if rc["kind"] == "trail_event" and rc["content"].get("chain_status") != "VERIFIED":
+            review.append("L4: cited trail chain is not verified")
+            break
     if claim.type in FACTUAL and all(recs[r.record_id]["untrusted"] for r in claim.source_refs):
         review.append("L4: factual claim sourced only from buyer-written text")
     return ("NEEDS_REVIEW", review) if review else ("PASS", [])
@@ -104,19 +115,54 @@ def verify(bundle, draft, judge=None):
         out.append({"claim": c, "verdict": v, "reasons": why})
 
     verified = [x["claim"] for x in out if x["verdict"] == "VERIFIED"]
+    issues = consistency_issues(bundle)
     missing = []
     for ev in bundle["required_evidence"]:
         need = REQUIRED_MAP.get(ev)
-        ok = bool(need) and any(c.type == need[0] and any(recs[r.record_id]["kind"] == need[1] for r in c.source_refs)
-                                for c in verified)
+        ok = bool(need) and any(c.type == need[0] and any(recs[r.record_id]["kind"] == need[1] and
+                                need[2](recs[r.record_id]["content"]) for r in c.source_refs) for c in verified)
         if not ok:
             missing.append(ev)
     if draft.decision == "ACCEPT":
         decision = "ACCEPT"
-    elif draft.decision == "ABSTAIN" or missing:
+    elif draft.decision == "ABSTAIN" or missing or issues:
         decision = "ABSTAIN"
     else:
         decision = "CONTEST"
     return {"decision": decision,
             "recommendation": "Accept the claim" if decision in ("ABSTAIN", "ACCEPT") else "Contest with the verified claims",
-            "claims": out, "missing_evidence": missing, "l3_ran": judge is not None}
+            "claims": out, "missing_evidence": missing, "consistency_issues": issues,
+            "l3_ran": judge is not None}
+
+
+def _ts(x):
+    if not x:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(str(x).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def consistency_issues(bundle):
+    """Cross-record checks (doc 06): order < shipped < delivered; dispute amount <= order amount."""
+    issues, recs = [], bundle["records"]
+    orders = [r for r in recs if r["kind"] == "order"]
+    o = orders[0]["content"] if orders else None
+    ot = _ts(o.get("created_at")) if o else None
+    for r in recs:
+        if r["kind"] != "shipment":
+            continue
+        c = r["content"]
+        st, dt = _ts(c.get("shipped_at")), _ts(c.get("delivered_at"))
+        if ot and st and st < ot:
+            issues.append(f"{r['record_id']}: shipped before the order was created")
+        if st and dt and dt < st:
+            issues.append(f"{r['record_id']}: delivered before it shipped")
+    if o:
+        try:
+            if float(bundle["dispute"]["content"]["amount"].split()[0]) > float(o["amount"].split()[0]):
+                issues.append("dispute amount exceeds the order amount")
+        except (KeyError, ValueError, IndexError):
+            pass
+    return issues

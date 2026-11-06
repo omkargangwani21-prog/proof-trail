@@ -65,6 +65,7 @@ def save_draft(conn, bundle, verification):
     payload = build_payload(bundle, verification)
     ver = {"decision": verification["decision"], "recommendation": verification["recommendation"],
            "missing_evidence": verification["missing_evidence"], "l3_ran": verification["l3_ran"],
+           "consistency_issues": verification.get("consistency_issues", []),
            "claims": [{"claim": x["claim"].model_dump(), "verdict": x["verdict"], "reasons": x["reasons"]}
                       for x in verification["claims"]]}
     case_id = int(bundle["case_id"].split("_")[1])
