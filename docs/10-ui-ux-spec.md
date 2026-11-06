@@ -28,7 +28,7 @@ Top bar: [ProofTrail]  Disputes · Trail · Demo Agent · Eval · Settings      
 +-----------------------------------------------------------------------------+
 | Disputes needing action (3)                              [Filter v] [Refresh]|
 |-----------------------------------------------------------------------------|
-| ● Due in 2d   ITEM_NOT_RECEIVED   $49.00   #D-77   Draft ready  [Review ->] |
+| ● Due in 2d   MERCHANDISE_OR_SERVICE_NOT_RECEIVED   $49.00   #D-77   Draft ready  [Review ->] |
 | ● Due in 6d   UNAUTHORIZED        $120.00  #D-81   No draft     [Draft ->]  |
 | ○ Resolved    ITEM_NOT_AS_DESC    $19.00   #D-70   Won/Lost not shown       |
 +-----------------------------------------------------------------------------+
@@ -38,7 +38,7 @@ States: empty ("No disputes yet. Run the Demo Agent or load fixtures"), loading 
 ### 5.2 Dispute workspace (hero screen)
 ```
 +-----------------------------------------------------------------------------+
-| ← Queue   Dispute D-77 · ITEM_NOT_RECEIVED · $49.00 · Stage: CLAIM          |
+| ← Queue   Dispute D-77 · MERCHANDISE_OR_SERVICE_NOT_RECEIVED · $49.00 · Stage: CLAIM          |
 +--------------------------+--------------------------------------------------+
 | Timeline                 | Draft response            Decision: CONTEST       |
 | 10/01 Order placed       |--------------------------------------------------|

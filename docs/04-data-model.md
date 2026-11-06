@@ -58,7 +58,7 @@ Types: TEXT, INTEGER, REAL. Money stored as **integer minor units** plus currenc
 ```json
 {
   "case_id": "c_001",
-  "dispute": {"record_id": "dsp:77", "reason": "ITEM_NOT_RECEIVED", "amount": "49.00 USD"},
+  "dispute": {"record_id": "dsp:77", "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "amount": "49.00 USD"},
   "records": [
     {"record_id": "ord:123", "kind": "order", "untrusted": false, "content": {}},
     {"record_id": "shp:9",  "kind": "shipment", "untrusted": false, "content": {}},
