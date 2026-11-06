@@ -10,7 +10,7 @@ def _shipped(c):
 REQUIRED_MAP = {"PROOF_OF_FULFILLMENT": ("fulfillment", "shipment", _shipped)}
 FACTUAL = {"fulfillment", "authorization", "policy", "history"}
 CARRIERS = ("ups", "fedex", "usps", "dhl")
-DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
 AMOUNT = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?|\b\d+\.\d{2}\b")
 TRACK = re.compile(r"\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{10,}\b", re.I)
 

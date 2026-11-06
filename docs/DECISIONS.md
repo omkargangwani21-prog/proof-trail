@@ -25,3 +25,9 @@
 - `POST /v1/customer/disputes/{id}/provide-evidence` as multipart with one `input` part (application/json) containing `{"evidences":[{evidence_type, evidence_info:{tracking_info:[{carrier_name, tracking_number}]}, notes}]}` was accepted. Response contained only a `detail` link.
 - Dispute moved WAITING_FOR_SELLER_RESPONSE -> UNDER_REVIEW (dispute_state UNDER_PAYPAL_REVIEW); evidence listed as PROOF_OF_FULFILLMENT, source SUBMITTED_BY_SELLER. After submission `allowed_response_options` is null.
 - Tracking data was synthetic demo data in the sandbox; must stay labeled synthetic in UI, README and video.
+
+## 2026-11-06: Date-pattern bug found by the first dev eval run
+- The date pattern used `\b` after the day, so it never matched inside ISO timestamps (`2026-10-08T13:00:00Z`).
+- Effect 1 (scorer): ground-truth `dates` was empty, so every correct date was flagged as invented.
+- Effect 2 (verifier): dates written inside timestamps in claim text were not entity-checked. Fixed with `(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)`; tests added both ways.
+- Eval cases regenerated and the manifest updated. The test split had not been run, so no test result was affected. Dev results from before the fix are discarded.

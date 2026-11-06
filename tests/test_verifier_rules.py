@@ -68,3 +68,15 @@ def test_broken_trail_claim_needs_review_verified_trail_passes():
     txt, refs = "The purchase intent was to buy a desk lamp.", [ref("trl:1", "summary", "buy a desk lamp")]
     assert run(bundle(extra=[trail("BROKEN")]), txt, refs, "authorization")["claims"][0]["verdict"] == "NEEDS_REVIEW"
     assert run(bundle(extra=[trail("VERIFIED")]), txt, refs, "authorization")["claims"][0]["verdict"] == "VERIFIED"
+
+
+def test_wrong_date_inside_a_timestamp_is_caught():
+    r = run(bundle(), "UPS delivered at 2026-11-09T03:15:00Z.",
+            [ref("shp:1", "carrier", "UPS"), ref("shp:1", "delivered_at", "2026-11-06T03:15:00Z")])
+    assert r["claims"][0]["verdict"] == "REMOVED"
+
+
+def test_right_date_inside_a_timestamp_passes():
+    r = run(bundle(), "UPS delivered at 2026-11-06T03:15:00Z.",
+            [ref("shp:1", "carrier", "UPS"), ref("shp:1", "delivered_at", "2026-11-06T03:15:00Z")])
+    assert r["claims"][0]["verdict"] == "VERIFIED"

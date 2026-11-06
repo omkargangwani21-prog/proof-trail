@@ -55,3 +55,9 @@ def test_oracle_agrees_with_ground_truth_on_every_case():
     for c in cases():
         got = verify(c["bundle"], oracle(c), lambda t, r: True)["decision"]
         assert got == c["truth"]["expected_decision"], (c["id"], c["variant"], got)
+
+
+def test_truth_dates_are_extracted_from_timestamps():
+    for c in cases():
+        if any(r["kind"] == "shipment" for r in c["bundle"]["records"]):
+            assert c["truth"]["true_entities"]["dates"], c["id"]
