@@ -20,3 +20,8 @@
 - Fix: prompt v2 requires a citation for every date, amount, carrier, tracking number or status mentioned in a claim.
 - Verifier behavior unchanged. Seeded fabricated claim was REMOVED at L2 in the same run.
 - Prompt changes are allowed only on the dev set. The test set must be frozen before the final eval and prompts are then fixed.
+
+## 2026-11-06: First real sandbox evidence submission succeeded
+- `POST /v1/customer/disputes/{id}/provide-evidence` as multipart with one `input` part (application/json) containing `{"evidences":[{evidence_type, evidence_info:{tracking_info:[{carrier_name, tracking_number}]}, notes}]}` was accepted. Response contained only a `detail` link.
+- Dispute moved WAITING_FOR_SELLER_RESPONSE -> UNDER_REVIEW (dispute_state UNDER_PAYPAL_REVIEW); evidence listed as PROOF_OF_FULFILLMENT, source SUBMITTED_BY_SELLER. After submission `allowed_response_options` is null.
+- Tracking data was synthetic demo data in the sandbox; must stay labeled synthetic in UI, README and video.
