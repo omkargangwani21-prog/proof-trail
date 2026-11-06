@@ -1,0 +1,74 @@
+[
+  {
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "valid": 5,
+    "real_ids": 5,
+    "cost": 0.00092,
+    "p50_s": 8.5,
+    "err": ""
+  },
+  {
+    "model": "openai/gpt-oss-120b",
+    "valid": 5,
+    "real_ids": 5,
+    "cost": 0.00293,
+    "p50_s": 3.4,
+    "err": ""
+  },
+  {
+    "model": "deepseek-ai/DeepSeek-V4-Pro-0813",
+    "valid": 5,
+    "real_ids": 5,
+    "cost": 0.0264,
+    "p50_s": 10.4,
+    "err": ""
+  },
+  {
+    "model": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+    "valid": 5,
+    "real_ids": 5,
+    "cost": 0.0007,
+    "p50_s": 9.1,
+    "err": ""
+  },
+  {
+    "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+    "valid": 5,
+    "real_ids": 5,
+    "cost": 0.00077,
+    "p50_s": 2.4,
+    "err": ""
+  },
+  {
+    "model": "zai-org/GLM-5.3-Flash",
+    "valid": 1,
+    "real_ids": 1,
+    "cost": 0.00511,
+    "p50_s": 9.6,
+    "err": "schema_invalid"
+  },
+  {
+    "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+    "valid": 2,
+    "real_ids": 2,
+    "cost": 0.01118,
+    "p50_s": 8.1,
+    "err": "schema_invalid"
+  },
+  {
+    "model": "google/gemma-3-27b-it",
+    "valid": 2,
+    "real_ids": 2,
+    "cost": 0.00067,
+    "p50_s": 11.5,
+    "err": "schema_invalid"
+  },
+  {
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "valid": 5,
+    "real_ids": 5,
+    "cost": 0.00382,
+    "p50_s": 6.4,
+    "err": ""
+  }
+]
