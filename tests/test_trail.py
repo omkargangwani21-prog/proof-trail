@@ -68,8 +68,8 @@ def test_records_for_the_case_bundle_and_db_tampering():
 
 
 def test_missing_key_is_unverified_and_empty_needs_no_key(monkeypatch):
+    monkeypatch.delenv("TRAIL_HMAC_KEY", raising=False)
     monkeypatch.delenv("PT_HMAC_KEY", raising=False)
-    monkeypatch.delenv("HMAC_KEY", raising=False)
     c = connect(":memory:")
     seeded(c)
     assert trail.trail_records(c, REF)[0]["content"]["chain_status"] == "UNVERIFIED"

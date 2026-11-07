@@ -17,9 +17,9 @@ class MissingKey(Exception):
 
 
 def _key(key=None):
-    k = key or os.environ.get("PT_HMAC_KEY") or os.environ.get("HMAC_KEY")
+    k = key or os.environ.get("TRAIL_HMAC_KEY") or os.environ.get("PT_HMAC_KEY")
     if not k:
-        raise MissingKey("set PT_HMAC_KEY in .env (any long random string)")
+        raise MissingKey("set TRAIL_HMAC_KEY in .env (any long random string)")
     return k.encode() if isinstance(k, str) else k
 
 
