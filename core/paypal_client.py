@@ -63,3 +63,14 @@ class PayPalClient:
             return {"dry_run": True, "dispute_id": dispute_id, "payload": payload}
         files = {"input": (None, json.dumps(payload), "application/json")}
         return self._request("POST", f"/v1/customer/disputes/{dispute_id}/provide-evidence", files=files)
+
+    def verify_webhook_signature(self, headers, event, webhook_id):
+        """True only if PayPal itself confirms the signature. headers: lower-cased PAYPAL-* delivery headers."""
+        names = ("auth-algo", "cert-url", "transmission-id", "transmission-sig", "transmission-time")
+        vals = {n: headers.get("paypal-" + n) for n in names}
+        if not webhook_id or not all(vals.values()):
+            return False
+        body = {k.replace("-", "_"): v for k, v in vals.items()}
+        body.update({"webhook_id": webhook_id, "webhook_event": event})
+        res = self._request("POST", "/v1/notifications/verify-webhook-signature", json=body)
+        return res.get("verification_status") == "SUCCESS"

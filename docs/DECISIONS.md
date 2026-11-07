@@ -59,3 +59,8 @@
 
 ## 2026-11-07: UI visual direction replaced
 - v1 (indigo palette, IBM Plex, pastel pill rows, a banner, four placeholder pages) was rejected as generic. v2: ink/paper with evidence-tag yellow, Archivo + Courier Prime, single table queue, nav shows only built screens. Doc 11 rewritten first, then code.
+
+## 2026-11-07: How disputes arrive (ingestion)
+- Three entry paths, all ending in GET /v1/customer/disputes/{id}: (1) "Fetch by ID", (2) poller (`python -m core.poll`), (3) webhook `POST /webhooks/paypal`. The poller always refreshes known disputes by id because the list endpoint lagged 15+ minutes in our sandbox.
+- Webhook: signature verified through POST /v1/notifications/verify-webhook-signature (fields per PayPal docs), duplicates ignored by event id, a failed fetch returns 5xx so PayPal retries. Events handled: CUSTOMER.DISPUTE.CREATED / UPDATED / RESOLVED.
+- [VERIFY] not confirmed from docs: the `resource` shape of dispute events (code reads resource.dispute_id, falls back to resource.id, then fetches by id) and whether our sandbox app has the webhooks scope needed to call the verify endpoint. If not, the poller is the delivery path and the README says so.
