@@ -51,6 +51,9 @@ def build_case(conn, d, origin="sandbox"):
                 "carrier": s["carrier"], "tracking_number": s["tracking_number"], "shipped_at": s["shipped_at"],
                 "delivered_at": s["delivered_at"], "delivery_status": s["delivery_status"],
                 "data_origin": s["data_origin"]}})
+    if order:
+        from core.trail import trail_records
+        records += trail_records(conn, f"ord:{order['id']}")
     pol = conn.execute("SELECT * FROM policies ORDER BY effective_from DESC, id DESC LIMIT 1").fetchone()
     if pol:
         records.append({"record_id": f"pol:{pol['id']}", "kind": "policy", "untrusted": False,
