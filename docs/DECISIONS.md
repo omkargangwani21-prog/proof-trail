@@ -69,3 +69,9 @@
 - Test split executed once (52 cases x 5 repeats, DeepSeek-V4-Flash, frozen scorer and prompts, commit 996feaef). Results in eval/results/. First attempt copied the wrong report (a dev run) into eval/results; corrected in a follow-up commit.
 - eval/summary.py added (reporting only, same bootstrap as report.py) to feed the Eval screen. No scoring change.
 - Demo agent: `python -m core.demo_agent start "..."` / `finish`. Refuses when no item fits the budget. The trail proves integrity of what the agent recorded, not truth of the shopper's instruction (README Limits). Shipment/delivery rows it creates are synthetic (data_origin synthetic_demo). Sandbox buyer approval is a human step.
+
+## 2026-11-07: Verifier gates a CONTEST on PROOF_OF_FULFILLMENT only (post-test change)
+- Found on the first real UNAUTHORISED sandbox dispute (PP-R-WVY-10197010): PayPal listed PROOF_OF_FULFILLMENT, PROOF_OF_REFUND and OTHER as requested. The old rule required every requested type to be satisfied, so the verifier abstained although all four fulfillment claims were VERIFIED. PROOF_OF_REFUND cannot be satisfied when no refund happened.
+- Change: only PROOF_OF_FULFILLMENT gates a contest; other unmet types are reported in `requested_not_provided` and shown to the reviewer. If PayPal lists no gating type, the old strict rule applies.
+- Made after the frozen test run. When the required list is only PROOF_OF_FULFILLMENT (all synthetic cases) the behaviour is identical, pinned by tests/test_verifier_gating.py. No eval rerun was done or needed.
+- Limit: this is one dispute. Whether PayPal always lists these three types for UNAUTHORISED disputes is not established.

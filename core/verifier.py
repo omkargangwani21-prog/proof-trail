@@ -8,6 +8,8 @@ def _shipped(c):
 
 # evidence type -> (claim type, record kind, predicate the cited RECORD must satisfy)
 REQUIRED_MAP = {"PROOF_OF_FULFILLMENT": ("fulfillment", "shipment", _shipped)}
+# Only these gate a CONTEST. Other types PayPal lists are reported as requested_not_provided.
+GATING = ("PROOF_OF_FULFILLMENT",)
 FACTUAL = {"fulfillment", "authorization", "policy", "history"}
 CARRIERS = ("ups", "fedex", "usps", "dhl")
 DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
@@ -116,13 +118,15 @@ def verify(bundle, draft, judge=None):
 
     verified = [x["claim"] for x in out if x["verdict"] == "VERIFIED"]
     issues = consistency_issues(bundle)
-    missing = []
-    for ev in bundle["required_evidence"]:
+    missing, not_provided = [], []
+    required = list(bundle["required_evidence"])
+    gate = [e for e in required if e in GATING] or required  # no gating type listed: stay strict
+    for ev in required:
         need = REQUIRED_MAP.get(ev)
         ok = bool(need) and any(c.type == need[0] and any(recs[r.record_id]["kind"] == need[1] and
                                 need[2](recs[r.record_id]["content"]) for r in c.source_refs) for c in verified)
         if not ok:
-            missing.append(ev)
+            (missing if ev in gate else not_provided).append(ev)
     if draft.decision == "ACCEPT":
         decision = "ACCEPT"
     elif draft.decision == "ABSTAIN" or missing or issues:
@@ -131,7 +135,7 @@ def verify(bundle, draft, judge=None):
         decision = "CONTEST"
     return {"decision": decision,
             "recommendation": "Accept the claim" if decision in ("ABSTAIN", "ACCEPT") else "Contest with the verified claims",
-            "claims": out, "missing_evidence": missing, "consistency_issues": issues,
+            "claims": out, "missing_evidence": missing, "requested_not_provided": not_provided, "consistency_issues": issues,
             "l3_ran": judge is not None}
 
 
