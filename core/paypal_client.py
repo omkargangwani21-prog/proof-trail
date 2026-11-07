@@ -74,3 +74,15 @@ class PayPalClient:
         body.update({"webhook_id": webhook_id, "webhook_event": event})
         res = self._request("POST", "/v1/notifications/verify-webhook-signature", json=body)
         return res.get("verification_status") == "SUCCESS"
+
+    def create_order(self, value, description, reference_id):
+        body = {"intent": "CAPTURE",
+                "purchase_units": [{"reference_id": reference_id, "description": description,
+                                    "amount": {"currency_code": "USD", "value": value}}],
+                "payment_source": {"paypal": {"experience_context": {
+                    "return_url": "https://example.com/return", "cancel_url": "https://example.com/cancel",
+                    "user_action": "PAY_NOW"}}}}
+        return self._request("POST", "/v2/checkout/orders", json=body)
+
+    def capture_order(self, order_id):
+        return self._request("POST", f"/v2/checkout/orders/{order_id}/capture", json={})
