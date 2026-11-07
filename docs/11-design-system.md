@@ -1,84 +1,78 @@
-# 11 — Design System
+# 11 — ProofTrail visual system
 
+> Revision 3 · 2026-11-07. This system is for a merchant reviewing a case file, not a generalized fintech dashboard. The code uses tokens for all color, type, space, shape and elevation decisions.
 
-## 1. Visual direction
-"Evidence folder": warm-neutral slate paper, ledger rules, mono receipts, one confident indigo. Serif headings give an official, case-file tone; sans body for speed; mono for anything that is a quoted fact.
+## Direction: the evidence docket
 
-## 2. Typography (Google Fonts, `display=swap`)
-| Role | Font | Use |
-|---|---|---|
-| Heading | IBM Plex Serif 600 | page and section titles |
-| Body/UI | IBM Plex Sans 400/500/600 | everything else |
-| Receipt | IBM Plex Mono 400/500 | citation tabs, ids, quoted values, hashes |
+ProofTrail should read like a careful clerk assembled a case file from source records. The interface’s memorable detail is a citation receipt attached to each drafted claim. Each receipt carries the claim number, record ID, field and quoted value; activating it opens the exact source record and highlights that value. The source relationship is the visual signature. Everything around it stays quiet: warm file paper, graphite ink, thin rules and a restrained burnt-clay annotation color.
 
-Scale (rem): 0.75 caption · 0.875 small · 1 body · 1.125 lead · 1.375 h3 · 1.75 h2 · 2.25 h1. Line-height 1.5 body, 1.25 headings. Max line length 72ch. Fallbacks: `Georgia, serif` / `system-ui, sans-serif` / `ui-monospace, monospace`.
+This keeps the useful warmth of paper from the previous direction, but removes the highlighter-yellow stripe as a generic product accent. Burnt clay is used for active review, links and receipt registration marks. Status colors retain familiar meanings and always pair with an icon and label. There are no brand marks, gradients, decorative cards, or color-only states.
 
-## 3. Color tokens
-### Light
-| Token | Hex | Pair and contrast |
-|---|---|---|
-| `--bg` | `#F6F7F9` | text on bg 16.65 |
-| `--surface` | `#FFFFFF` | text on surface 17.85 |
-| `--text` | `#0F172A` | — |
-| `--muted` | `#475569` | on white 7.58 |
-| `--primary` | `#4338CA` | white text on primary 7.90 |
-| `--verified-fg/bg` | `#166534` / `#DCFCE7` | 6.49 |
-| `--review-fg/bg` | `#92400E` / `#FEF3C7` | 6.37 |
-| `--removed-fg/bg` | `#991B1B` / `#FEE2E2` | 6.80 |
-| `--neutral-fg/bg` | `#334155` / `#E2E8F0` | 8.40 |
-| `--info-fg/bg` | `#3730A3` / `#E0E7FF` | 8.06 |
-| `--border-input` | `#8493A8` | on white 3.12 (≥3:1 for UI boundary) |
-| `--danger` | `#B91C1C` | white text 6.47 |
+## Typography
 
-### Dark
-| Token | Hex | Pair and contrast |
-|---|---|---|
-| `--bg` | `#0B1220` | — |
-| `--surface` | `#121B2E` | text `#E6EAF2` 14.25 |
-| `--muted` | `#9AA6BC` | on surface 7.00 |
-| `--primary` | `#A5B4FC` | on surface 8.62; dark text on primary button 9.39 |
-| `--verified-fg/bg` | `#86EFAC` / `#0F2A1B` | 10.94 |
-| `--review-fg/bg` | `#FCD34D` / `#34270A` | 10.11 |
-| `--removed-fg/bg` | `#FCA5A5` / `#3A1111` | 8.72 |
-| `--border-input` | `#5B6B85` | 3.18 |
+Google Fonts: **Instrument Sans** for interface text and **IBM Plex Mono** for source IDs, timestamps, quoted evidence and payload. They are real typefaces with local system fallbacks.
 
-Implementation: define on `:root`; override in `@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])`, and again under `:root[data-theme="dark"]`. `body` gets an explicit background.
+| Role | Font | Size / line height | Use |
+|---|---|---:|---|
+| Page title | Instrument Sans 600 | 30 / 36 px | Screen title, no hero treatment |
+| Section title | Instrument Sans 600 | 20 / 26 px | Timeline and draft sections |
+| Body | Instrument Sans 400 | 15 / 22 px | Case content and claims |
+| Control / label | Instrument Sans 550 | 13 / 18 px | Buttons, table headings and metadata |
+| Supporting text | Instrument Sans 400 | 13 / 18 px | Secondary context |
+| Receipt / record | IBM Plex Mono 400/500 | 12 / 18 px | IDs, source fields and quoted values |
+| Amount | Instrument Sans 600, tabular numerals | 15 / 20 px | Right-aligned currency |
 
-## 4. Spacing, radius, elevation
-Spacing 4-pt scale: 4, 8, 12, 16, 24, 32, 48. Page gutter 16 px (mobile) / 32 px (desktop). Radius: 6 (inputs/chips), 10 (cards). Elevation: border 1 px plus a faint shadow on modals only; no heavy shadows. Ledger rule: 1 px `--border` lines between claim rows.
+Body copy stays under 72ch when possible. Headings are sentence case. No tracked uppercase eyebrow above headings.
 
-## 5. Components
-| Component | Spec |
-|---|---|
-| **Status chip** | icon + text, never color alone. Verified ✓, Needs review !, Removed ✕, Neutral •. 24 px high, radius 6 |
-| **Citation tab** | mono 12 px, neutral bg, left 3 px primary edge, hover raises; click opens source panel; focusable, `aria-label="Source shp:9 tracking_number"` |
-| **Claim row** | number · chip · claim text · tabs row · actions (Keep/Remove). Removed text has strikethrough **plus** reason line |
-| **Source panel** | right drawer ≥1024, bottom sheet on mobile; highlights quoted value with `<mark>` styled with info colors |
-| **Untrusted block** | dashed border, label "Buyer-written, treated as untrusted" |
-| **Primary button** | primary bg, white text, 40 px min height; disabled state 60% with cursor not-allowed and text remains readable |
-| **Danger button** | `--danger`, used only for irreversible actions |
-| **Banner** | info / warning / error with icon; persistent for SANDBOX and REPLAY |
-| **Budget meter** | bar + numeric text "$2.40 / $20" (not color-only) |
-| **Payload preview** | mono block, copy button, collapsible |
-| **Chart** | CSS/SVG bars with CI whiskers, direct labels, colors from tokens; baseline neutral, ours primary |
-| **Skeleton** | neutral shimmer; disabled under reduced motion |
+## Color and contrast
 
-## 6. Interaction and motion
-150–200 ms ease-out for panel slides and chip changes. No decorative animation. Reduced-motion: no transitions. Focus ring: 2 px `--primary` with 2 px offset.
+WCAG contrast ratios below use the WCAG 2.x relative-luminance formula, rounded to two decimals. Body and control text pairs are all above 4.5:1. Borders and focus indicators are non-text boundaries and exceed 3:1 against their adjacent surface.
 
-## 7. Iconography
-Inline SVG, 1.5 px stroke, own simple set (check, alert, x, link, shield, clock). No PayPal or third-party brand marks.
+| Text token | Light background | Contrast | Dark background | Contrast | Use |
+|---|---|---:|---|---:|---|
+| `--ink` `#24251F` / `#EEE9DF` | `--paper` `#F4F0E7` | 13.58:1 | `--paper` `#171916` | 14.62:1 | Main text |
+| same | `--surface` `#FBF9F4` | 14.68:1 | `--surface` `#20231E` | 13.14:1 | Detail surface |
+| `--muted` `#55574E` / `#B7B7AA` | `--paper` | 6.46:1 | `--paper` | 8.73:1 | Secondary text |
+| `--accent-ink` `#873923` / `#E3A08A` | `--paper` | 6.99:1 | `--paper` | 8.14:1 | Links and active review |
+| same | `--receipt` `#F1E5DA` / `#30241F` | 6.43:1 | 6.91:1 | Citation receipt text |
+| `--muted` `#55574E` / `#B7B7AA` | `--surface` `#FBF9F4` / `#20231E` | 6.98:1 | 7.85:1 | Secondary copy on raised surfaces |
+| `--ink` `#24251F` / `#EEE9DF` | `--receipt` `#F1E5DA` / `#30241F` | 12.48:1 | 12.42:1 | Receipt field text |
+| `--accent-ink` `#873923` / `#E3A08A` | `--accent-pale` `#E9D3C5` / `#58352B` | 5.53:1 | 4.93:1 | Selected review choice |
+| `--info-ink` `#36566F` / `#A7C6DA` | `--surface` `#FBF9F4` / `#20231E` | 7.34:1 | 8.88:1 | Sandbox marker on header surface |
+| `--verified-ink` `#175B41` / `#9BD3B5` | `--verified-bg` `#E2EEE5` / `#163126` | 6.74:1 | 8.24:1 | Verified icon and text |
+| `--review-ink` `#80401C` / `#E9BB7A` | `--review-bg` `#F6EBDD` / `#392A1A` | 6.69:1 | 7.80:1 | Needs review icon and text |
+| `--removed-ink` `#8F2F26` / `#F0A69B` | `--removed-bg` `#F5E5E0` / `#3D211F` | 6.60:1 | 7.41:1 | Removed icon and text |
+| `--info-ink` `#36566F` / `#A7C6DA` | `--info-bg` `#E6EDF2` / `#202F39` | 6.54:1 | 7.68:1 | Sandbox / informational state |
+| `--on-button` `#FBF9F4` / `#171916` | `--button` `#24251F` / `#EEE9DF` | 14.68:1 | 14.62:1 | Primary action |
+| `--rule-strong` `#70736A` / `#77796F` | `--surface` | 4.59:1 | `--surface` | 3.60:1 | Input/table boundaries |
+| `--focus` `#873923` / `#E3A08A` | `--surface` | 7.56:1 | `--surface` | 7.32:1 | Visible focus ring |
 
-## 8. Voice and microcopy
-Direct and calm. Examples: "Removed: this value is not in any record." · "We recommend accepting. Not enough verified evidence." · "Sandbox only. Nothing here touches live PayPal."
+`--rule` is decorative only (`#D8D3C8` light; `#34372F` dark). Do not use it for meaningful boundaries. Dark mode is automatic from system preference and can be explicitly selected with `data-theme="dark"`; an explicit light choice overrides the system.
 
-## 9. Implementation notes
-Tailwind via CDN with `theme.extend` mapping tokens to CSS variables. HTMX swaps for claim actions. No external images. Set `<title>` per page. Layout tested at 360, 768, 1280, 1440.
+## Layout and spacing
 
-## 10. Design QA checklist
-- [ ] Every text/background pair appears in the tables above
-- [ ] Light and dark both checked
-- [ ] Status shown without color (grayscale screenshot test)
-- [ ] Keyboard-only run of the submit flow
-- [ ] 200% zoom: no clipping
-- [ ] Screenshot of each screen in all states saved in `docs/screens/`
+- Spacing scale: 4, 8, 12, 16, 24, 32, 48 and 64 px.
+- Main content max width: 1320 px; page gutters: 32 px at desktop, 24 px at tablet, 16 px at mobile.
+- Queue rows are open and ruled, not enclosed in repeated cards.
+- Case review is two columns at ≥ 1024 px: chronology at 34%, draft at 66%. Between 640 and 1023 px, chronology stacks above the draft. Below 640 px, the source panel becomes a bottom sheet and the action bar pins to the viewport bottom.
+- Radius: 0 on data rows and receipt slips; 2 px on inputs and buttons; 4 px only on menus and modal. No pill badges.
+- Elevation: none on normal content; one restrained shadow on the modal/drawer only.
+
+## Signature component: citation receipt
+
+A claim is followed by one or more receipt slips. Each slip visually attaches to its claim using an asymmetrical edge, a short perforation rule and a narrow clay registration stripe. It shows a stable source ID, exact field and short quoted value. The entire slip is a keyboard-operable button. It is not a colored badge or a generic card. On activation, the drawer shows all source-record fields with the quoted field/value highlighted. If the quoted source is unavailable, the claim shows “Source record unavailable” and a retry path; never fabricate replacement text.
+
+## Status and controls
+
+| State | Visible mark | Text | Color role |
+|---|---|---|---|
+| Verified | Check mark | Verified | Green |
+| Needs review | Open circle with dot | Needs review | Amber |
+| Removed | Cross | Removed | Red |
+| Informational | Small outlined square | Sandbox / Dry run | Blue |
+
+Icons reinforce words, never replace them. Buttons are at least 40 px tall; every pointer target is at least 24 by 24 px. Focus is a 2 px accent ring with 2 px offset. Modal focus is trapped and restored; Escape closes it. Reduced motion disables transitions. Source panels remain functional without animation.
+
+## Theme and future surfaces
+
+Use the same paper/ink/copper palette in both themes. In dark mode, receipt slips are warmer than the background so source provenance remains distinct without glow. The future Trail viewer should render linked record slips on a single chronology. The Demo Agent should use a plain event log and an explicit buyer-approval step. Eval Results should use small multiples and labeled intervals rather than oversized KPI cards. Settings should be a simple form with visible sandbox host. These future surfaces are specified for continuity and must not appear in navigation until they exist.

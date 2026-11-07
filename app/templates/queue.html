@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon, status %}
+{% block title %}Disputes{% endblock %}
+{% block head %}
+<style>
+.queue-copy{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 0 18px;color:var(--muted);font-size:14px}.queue-copy p{margin:0}.queue-link{font-weight:600;text-decoration:none}.queue-link:hover{text-decoration:underline}
+.queue-group{margin-top:4px}.queue-group + .queue-group{margin-top:35px}.group-title{display:flex;align-items:baseline;gap:10px;padding:0 0 10px;border-bottom:1px solid var(--rule-strong);margin-bottom:0}.group-title h2{font-size:16px;letter-spacing:-.01em}.group-title span{font:400 12px/1.4 var(--mono);color:var(--muted)}
+.dispute-table{width:100%;border-collapse:collapse;table-layout:fixed}.dispute-table th{text-align:left;color:var(--muted);font-size:12px;font-weight:600;padding:11px 12px;border-bottom:1px solid var(--rule);vertical-align:bottom}.dispute-table td{padding:15px 12px;border-bottom:1px solid var(--rule);vertical-align:middle}.dispute-table th:first-child,.dispute-table td:first-child{padding-left:16px}.dispute-table th:last-child,.dispute-table td:last-child{padding-right:16px}.dispute-table tbody tr{background:var(--surface)}.dispute-table tbody tr.needs-action td:first-child{box-shadow:inset 3px 0 0 var(--accent-ink)}.deadline{display:flex;flex-direction:column;gap:3px}.deadline strong{font-size:14px;font-weight:600}.deadline .status{font-size:12px}.dispute-title{display:block;font-weight:600;line-height:1.3;color:var(--ink)}.dispute-id{display:block;margin-top:4px;color:var(--muted)}.amount{text-align:right;font-weight:600;white-space:nowrap}.amount-head{text-align:right!important}.dispute-table .action-cell{text-align:right;white-space:nowrap}.empty-state{padding:52px 0 0;max-width:580px}.empty-state h2{font-size:18px}.empty-state p{margin-top:8px;color:var(--muted);max-width:56ch}.empty-mark{display:flex;align-items:center;gap:9px;margin-bottom:16px;color:var(--accent-ink)}
+.table-loading{border-top:1px solid var(--rule-strong)}.table-loading .loading-block{display:grid;grid-template-columns:1.1fr 2fr 1fr 1fr .7fr;align-items:center;gap:30px;padding:15px 16px}.table-loading .loading-line:nth-child(1){width:68%}.table-loading .loading-line:nth-child(2){width:86%}.table-loading .loading-line:nth-child(3){width:54%}.table-loading .loading-line:nth-child(4){width:70%}.table-loading .loading-line:nth-child(5){width:60%}
+@media(max-width:900px){.dispute-table tbody tr.needs-action td:first-child{box-shadow:none}.queue-copy{padding:12px 0 16px}.dispute-table,.dispute-table tbody,.dispute-table tr,.dispute-table td{display:block}.dispute-table{table-layout:auto}.dispute-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.dispute-table tbody tr{border-top:1px solid var(--rule);padding:8px 14px 11px;margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 18px}.dispute-table tbody tr:first-child{border-top:0}.dispute-table td,.dispute-table td:first-child,.dispute-table td:last-child{border:0;padding:7px 0}.dispute-table td:before{content:attr(data-label);display:block;color:var(--muted);font-size:11px;font-weight:600;margin-bottom:3px}.dispute-table .why-cell{grid-column:1/-1;grid-row:1}.dispute-table .deadline-cell{grid-column:1;grid-row:2}.dispute-table .amount{grid-column:2;grid-row:2;text-align:right}.dispute-table .status-cell{grid-column:1;grid-row:3}.dispute-table .action-cell{grid-column:2;grid-row:3;align-self:end}.dispute-table .action-cell:before{display:none}.dispute-table .amount-head{text-align:left!important}.group-title{padding-left:2px}.queue-group + .queue-group{margin-top:27px}}
+@media(max-width:420px){.queue-copy{align-items:flex-start}.queue-copy p{max-width:26ch}.dispute-table tbody tr{padding-left:12px;padding-right:12px;gap:1px 8px}.dispute-table .status-cell .status{white-space:normal}.dispute-table .amount{font-size:14px}}
+@media(max-width:420px){.dispute-table .action-cell{white-space:normal;text-align:right}.dispute-table .action-cell .btn{max-width:100%;white-space:nowrap}}
+</style>
+{% endblock %}
+{% macro row(r) -%}
+<tr{% if r.is_action %} class="needs-action"{% endif %}>
+ <td class="deadline-cell" data-label="Respond by"><div class="deadline"><strong>{{ r.due }}</strong>{% if r.due_tone == "removed" %}<span class="status status--removed">{{ icon("alert") }}<span>Deadline passed</span></span>{% endif %}</div></td>
+ <td class="why-cell" data-label="Dispute"><span class="dispute-title">{{ r.why }}</span><span class="dispute-id mono">{{ r.pid }}</span></td>
+ <td class="amount" data-label="Amount">{{ r.amount }}</td>
+ <td class="status-cell" data-label="Status">{{ status(r.state_tone|upper, r.state) }}</td>
+ <td class="action-cell" data-label="Action"><a class="btn {% if not r.is_action %}btn--quiet{% endif %} btn--small" href="/disputes/{{ r.pid }}" aria-label="{{ r.cta }} dispute {{ r.pid }}">{{ r.cta }}{% if r.is_action %} {{ icon("arrow") }}{% endif %}</a></td>
+</tr>
+{%- endmacro %}
+{% block content %}
+<header class="page-head"><div class="title-group"><h1>Disputes</h1><p>Review the response deadline, then open a case to check its evidence.</p></div><div class="actions"><a class="btn btn--quiet btn--small" href="/disputes">Refresh</a></div></header>
+{% if dev_fixture %}<p class="dev-note">Development sample · values are synthetic and for screenshot review only.</p>{% endif %}
+{% if state == "error" %}<div class="message message--error" role="alert">{{ error_message }}</div>
+{% elif state == "loading" %}<p class="queue-copy" role="status">Loading disputes…</p><div class="table-loading" aria-hidden="true">{% for _ in range(5) %}<div class="loading-block"><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span></div>{% endfor %}</div>
+{% elif not action and not other %}<section class="empty-state" aria-labelledby="empty-title"><div class="empty-mark">{{ icon("receipt") }}<span>Disputes</span></div><h2 id="empty-title">No disputes yet</h2><p>A dispute created on a PayPal sandbox payment will appear here with its response deadline.</p></section>
+{% else %}
+<div class="queue-copy"><p>{{ action|length + other|length }} disputes on file{% if action %}. {{ action|length }} need a response, soonest deadline first.{% else %}. No disputes need a response.{% endif %}</p></div>
+{% if action %}<section class="queue-group" aria-labelledby="needs-title"><div class="group-title"><h2 id="needs-title">Needs action</h2><span>{{ action|length }}</span></div><table class="dispute-table"><thead><tr><th scope="col">Respond by</th><th scope="col">Dispute</th><th scope="col" class="amount-head">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody>{% for r in action %}{{ row(r) }}{% endfor %}</tbody></table></section>{% endif %}
+{% if other %}<section class="queue-group" aria-labelledby="other-title"><div class="group-title"><h2 id="other-title">Answered or under review</h2><span>{{ other|length }}</span></div><table class="dispute-table"><thead><tr><th scope="col">Respond by</th><th scope="col">Dispute</th><th scope="col" class="amount-head">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody>{% for r in other %}{{ row(r) }}{% endfor %}</tbody></table></section>{% endif %}
+{% endif %}
+{% endblock %}
+
+

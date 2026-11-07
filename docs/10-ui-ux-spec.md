@@ -1,136 +1,70 @@
-# 10 — UI/UX Specification
+# 10 — UI/UX specification
 
+## Product surface and user job
 
-## 1. Design concept: "the evidence folder"
-ProofTrail should feel like a careful case file, not a chatbot. Ledger rules, mono citations, calm color, claims presented as **entries with receipts**. The one memorable element: **citation tabs**, small mono pills attached to each claim like paper tabs, that open the exact source record beside it.
+ProofTrail helps a small merchant operator decide quickly whether evidence supports a PayPal sandbox dispute. The user must inspect a deadline, understand the buyer’s message, check claims against source records, and explicitly approve an exact payload. The review screen is the product; there is no marketing home page.
 
-## 2. Principles
-1. **Proof over prose.** Claim + receipt, always.
-2. **Deadlines visible.** What is due sits first.
-3. **Human decides.** The primary button is a review action, not "auto".
-4. **Calm.** No red unless something is removed or broken.
-5. **Honest failures.** Errors say what happened and what to do.
+## Design direction
 
-## 3. Users and context
-Maya (operator) on a laptop at a desk, needs scan-and-decide. Secondary: judge watching a video at 1080p. Primary viewport 1280–1440 px; must work down to 360 px.
+Use the evidence docket system in [11-design-system.md](11-design-system.md). The defining interaction is a citation receipt attached to each claim. Selecting it opens the exact source record and highlights the quoted field value. This comes from line-attached review patterns: the claim and its evidence must be inspected together. Queue deadlines borrow from case-management worklists; final submission borrows from payment confirmation flows, with a clearly enumerated payload and explicit approval.
 
-## 4. Information architecture
-```
-Top bar: [ProofTrail]  Disputes · Trail · Demo Agent · Eval · Settings      [SANDBOX] [Budget $x/20] [mode]
-```
+## Information architecture
 
-## 5. Screens and wireframes
+Only **Disputes** appears in primary navigation because it is the only built product surface. The queue is `/disputes`; each case opens at `/disputes/{paypal_dispute_id}`. Trail viewer, Demo Agent, Eval results and Settings are future surfaces and are not nav items.
 
-### 5.1 Disputes queue
-```
-+-----------------------------------------------------------------------------+
-| ProofTrail  Disputes  Trail  Demo Agent  Eval  Settings   SANDBOX $2.4/20 LIVE|
-+-----------------------------------------------------------------------------+
-| Disputes needing action (3)                              [Filter v] [Refresh]|
-|-----------------------------------------------------------------------------|
-| ● Due in 2d   MERCHANDISE_OR_SERVICE_NOT_RECEIVED   $49.00   #D-77   Draft ready  [Review ->] |
-| ● Due in 6d   UNAUTHORIZED        $120.00  #D-81   No draft     [Draft ->]  |
-| ○ Resolved    ITEM_NOT_AS_DESC    $19.00   #D-70   Won/Lost not shown       |
-+-----------------------------------------------------------------------------+
-```
-States: empty ("No disputes yet. Run the Demo Agent or load fixtures"), loading skeleton, error banner. Due date shown only if API returns it **[VERIFY]**; else "Due: not provided".
+The shell shows an unobtrusive **Sandbox** marker with a tooltip that says nothing here touches live PayPal. The header spend meter is labeled **Model spend**; its tooltip explains it is language-model credits against the configured hard cap. No spend figure is invented.
 
-### 5.2 Dispute workspace (hero screen)
-```
-+-----------------------------------------------------------------------------+
-| ← Queue   Dispute D-77 · MERCHANDISE_OR_SERVICE_NOT_RECEIVED · $49.00 · Stage: CLAIM          |
-+--------------------------+--------------------------------------------------+
-| Timeline                 | Draft response            Decision: CONTEST       |
-| 10/01 Order placed       |--------------------------------------------------|
-| 10/02 Shipped (trk ...)  | 1 ✓ Verified   "Order shipped 10/02 via UPS."    |
-| 10/05 Marked delivered   |     [shp:9 tracking_number] [shp:9 shipped_at]   |
-| 10/09 Dispute opened     | 2 ! Needs review "Buyer signed for the parcel."  |
-|                          |     [no receipt found]            [Keep][Remove] |
-| Buyer message (untrusted)| 3 ✕ Removed   "Delivered to front door."         |
-| ┌──────────────────────┐ |     Reason: value not in any record              |
-| │ "I never got it..."  │ |--------------------------------------------------|
-| └──────────────────────┘ | Missing evidence: Signature confirmation         |
-+--------------------------+--------------------------------------------------+
-| Source panel (slides in on citation tab click): record, field, quoted value |
-+-----------------------------------------------------------------------------+
-| Verified 1 · Needs review 1 · Removed 1        [Accept claim] [Review & submit]|
-+-----------------------------------------------------------------------------+
-```
-Interactions: clicking a citation tab opens the Source panel highlighting the quoted value. "Review & submit" opens the confirm modal (5.2b). Sticky action bar.
+## Disputes queue
 
-**Abstain card** (replaces draft when ABSTAIN):
-```
-+---------------------------------------------------------+
-| We recommend accepting this claim                       |
-| Not enough verified evidence to contest honestly.       |
-| Missing: Proof of delivery, Carrier confirmation        |
-| [Accept claim ▾ allowed type]   [See what was checked]  |
-+---------------------------------------------------------+
-```
+Use a full-width, open table with columns for Respond by, Dispute, Amount, Status and Action. Needs-action rows sort first by earliest known deadline, followed by other cases. The latest draft status affects the action label. A `SUBMITTED` or `SUBMITTED_DRY_RUN` latest draft never appears in Needs action. Use plain-language dispute reasons and monospace PayPal IDs. Amounts are tabular and right aligned. On mobile, each row becomes a labeled, open record section; it must not clip or require horizontal scrolling.
 
-### 5.2b Confirm modal
-```
-+------------------------------------------------+
-| Review before submitting         SANDBOX · DRY RUN |
-| Payload preview (exact JSON/multipart fields)  |
-| • 1 verified claim included                    |
-| • 1 removed claim excluded                     |
-| [ ] I reviewed these claims and approve them   |
-| [Cancel]                 [Approve and submit]  |
-+------------------------------------------------+
-```
-Button disabled until the checkbox is ticked. Focus trap, Esc closes.
+## Dispute workspace
 
-### 5.3 Trail viewer
-```
-Order #A-12  Origin: AI agent      Chain: ✓ Verified (3 events)
- ┌intent──────┐ → ┌cart────────┐ → ┌payment─────┐
- │"buy X <$50"│   │X $49 qty1  │   │capture ID.. │
- │hash a1f3.. │   │hash 9be2.. │   │hash 0c77.. │
- └────────────┘   └────────────┘   └────────────┘
- [Tamper test: modify event 2] → Chain: ✕ Broken at event 2
-```
-Footnote: "Tamper-evident, not tamper-proof."
+The header identifies the reason, PayPal ID, amount, PayPal status and deadline. At desktop widths, a left chronology shows order → shipment → delivery → dispute; a missing event is stated as unavailable rather than invented. Buyer messages appear under “Buyer message” and are visibly labeled **Untrusted text**. The evidence draft sits to the right.
 
-### 5.4 Demo Agent simulator
-Form: shopper intent text → agent steps list (intent, cart, order created, awaiting buyer approval, captured). Clear "Sandbox buyer approval required" step.
+Claims are a numbered list, grouped by verifier verdict:
 
-### 5.5 Eval results
-```
-Unsupported claims in final payload (lower is better, 95% CI)
- Baseline  ████████████████  x%
- Cited     ██████████        y%
- ProofTrail ██               z%
-[Model table] [Cost table] [Failure browser] [Reproduce: commit, seed, models, date]
-Banner: Synthetic data. n = 40 cases × 5 runs.
-```
-Chart values come from `results.json`; never typed by hand.
+- **Verified:** check icon and word; claim text; attached citation receipt(s).
+- **Needs review:** open-circle icon and word; claim text; attached receipts and Keep / Remove choice.
+- **Removed:** cross icon and word; struck-through claim, removal reason and receipt(s), when available.
 
-### 5.6 Settings
-Mode (live-sandbox / replay), budget meter, key status as "set / not set" only, base URL (read-only, must be sandbox).
+A missing-evidence list names only items from `verification_json`. A source panel displays the full record from `source_records`, its record ID and kind, and the precise quoted value highlighted. On wide screens it opens at the right; on narrow screens it opens as a bottom sheet. It closes by close button and Escape, returns keyboard focus, and never hides the whole case context.
 
-## 6. Components
-Status chip, citation tab, claim row, source panel, timeline, payload preview, budget meter, mode badge, banner, empty state, skeleton. Specs in doc 11.
+An Abstain decision replaces the submission panel with **“We recommend accepting this claim”**, followed by missing evidence and what the verifier checked. Do not offer a contest-submit action from that state.
 
-## 7. Content rules
-Plain words. Buttons are verbs: "Review & submit", "Remove claim". Error text: what happened + what to do. Never "AI-powered" marketing. No PayPal logos.
+A sticky action bar shows verified, needs-review and removed counts, and the review/submission action only when a submittable draft exists. Needs-review claims must be explicitly kept or removed before the confirmation action is enabled. Any kept item must be included only if the stored payload supports it; otherwise the UI must block submission and explain why rather than silently altering the database payload.
 
-## 8. Accessibility (WCAG 2.2 AA)
-- Status uses **icon + text + color**, never color alone.
-- Contrast per doc 11 table.
-- Visible focus ring 2 px, 3:1 against adjacent colors.
-- Full keyboard path; no single-key shortcut for approve.
-- Modal traps focus and returns it.
-- Live region announces verdict changes.
-- Targets ≥ 24 px (WCAG 2.2), aim 40 px.
-- Respect `prefers-reduced-motion`.
-- Tables have proper headers; claim list is an ordered list.
+## Confirmation
 
-## 9. Responsive
-≥1024: two columns. 640–1023: timeline collapses above draft. <640: single column, action bar becomes bottom sheet.
+The confirmation dialog shows **Sandbox · Dry run** or **Sandbox submission** from the selected mode. It previews the exact `payload_json` content and counts included and excluded claims. It requires an explicit acknowledgement checkbox before enabling the primary action. Focus is trapped while open, Escape and Cancel close it, and focus returns to the opener. A completed dry run must be labeled “Dry run complete”; do not say PayPal received the evidence. Real sandbox API submission must be clearly labeled “Submitted to PayPal sandbox”. Nothing in this application can address live PayPal.
 
-## 10. States checklist (every screen)
-Loading, empty, error, partial, success, offline/replay.
+## States and copy
 
-## 11. Usability test (self + 2 peers if possible)
-Task 1: find the soonest due dispute (<10 s). Task 2: explain why claim 3 was removed. Task 3: submit in dry-run. Note failures in `docs/usability-notes.md`.
+Every route and state uses direct sentences and a safe next action.
+
+| State | Queue | Dispute workspace |
+|---|---|---|
+| Loading | “Loading disputes…” with stable row placeholders. | “Loading this dispute…” with chronology and draft structure retained. |
+| Empty | “No disputes yet. A sandbox dispute will appear here after it is created.” | No case id: “This dispute is not in the local case file. Return to disputes and refresh the list.” |
+| Error | “Disputes could not be loaded. Check the local database, then refresh.” | “This case could not be loaded. Return to disputes and try again.” |
+| Partial | “Some dispute details are unavailable. Open a case to inspect its source records.” | Identify the missing order, shipment, buyer message or source record directly. Keep verified details available. |
+| Success | “No disputes need a response.” or list the answered cases. | “Dry run complete. No request was sent to PayPal.” / “Submitted to PayPal sandbox.” |
+
+No lorem text, placeholder data or “Not built yet” pages. Dev-only fixtures are loaded only when both `PT_ENV=development` and `PT_UI_FIXTURES=1`; production always reads SQLite.
+
+## Accessibility and responsive behavior
+
+Target WCAG 2.2 AA: minimum 4.5:1 normal-text contrast, 3:1 non-text boundaries, visible focus, keyboard-only access to citations and decisions, status with both text and icon, labels for form controls, accessible dialog name and focus trap, reduced-motion support, and target size ≥ 24 px (40 px default for buttons). Screen-reader live region announces source-panel changes and review-state updates.
+
+Required screenshot widths: 1440, 1280, 768 and 390 px. Desktop two-column case layout begins at 1024 px; tablet stacks the timeline before the draft; mobile uses one column, a bottom source panel, and a pinned action area that leaves content scrollable. No horizontal overflow at any width. Support explicit light and dark theme states.
+
+## Acceptance checks
+
+1. A submitted or dry-run-submitted dispute never appears in Needs action.
+2. Model spend has the visible label and explanatory tooltip.
+3. Each citation opens the same record and exact field/value represented by the stored claim.
+4. Removed claims are visibly crossed out and include the stored removal reason.
+5. Missing evidence and Abstain recommendation come from stored verification JSON.
+6. Modal payload is byte-for-byte equivalent at the data level to the payload being submitted; approval is explicit.
+7. Empty, loading, error, partial and success states have useful, direct copy.
+8. Four target widths render with light and dark themes; keyboard/focus and reduced motion are checked.

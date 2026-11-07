@@ -53,3 +53,9 @@
 - 60 labeled pairs per judge (30 supported, 30 unsupported, all passing L2 so only the judge decides). gpt-oss-120b and Nemotron-3-Super: 60/60 correct, 0 false accepts, 0 false rejects. Same-author, blatant-overreach templates only: weak evidence, not a proof; subtle cases untested. Listed under Limits.
 - Frozen from now on: drafter_v2, judge_v1, scorer, case generator. No tuning on dev after this point. Remaining eval work: run the test split once.
 - Known cost of strictness: a claim naming an item but citing only the shipment record is correctly REMOVED (item name lives in the order record). Completeness drops on some runs. Reported under Limits.
+
+## 2026-11-07: UI stack detail
+- UI uses plain CSS custom properties (the doc 11 tokens) instead of the Tailwind CDN: no network dependency, offline-safe replay mode. Jinja + FastAPI unchanged. Handlers are async and open the SQLite connection inside the handler (connections cannot cross threads).
+
+## 2026-11-07: UI visual direction replaced
+- v1 (indigo palette, IBM Plex, pastel pill rows, a banner, four placeholder pages) was rejected as generic. v2: ink/paper with evidence-tag yellow, Archivo + Courier Prime, single table queue, nav shows only built screens. Doc 11 rewritten first, then code.
