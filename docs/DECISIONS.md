@@ -75,3 +75,9 @@
 - Change: only PROOF_OF_FULFILLMENT gates a contest; other unmet types are reported in `requested_not_provided` and shown to the reviewer. If PayPal lists no gating type, the old strict rule applies.
 - Made after the frozen test run. When the required list is only PROOF_OF_FULFILLMENT (all synthetic cases) the behaviour is identical, pinned by tests/test_verifier_gating.py. No eval rerun was done or needed.
 - Limit: this is one dispute. Whether PayPal always lists these three types for UNAUTHORISED disputes is not established.
+
+## 2026-11-07: Hand classification of flagged test runs (DeepSeek-V4-Flash)
+- Labels fixed before reading the flagged items (ADOPTED / REBUTTAL / FALSE_POSITIVE, plus CITATION_VIOLATION for forbidden-source flags). Result in eval/results/test-DeepSeek-V4-Flash-0731/flag-classification.json.
+- 8 flagged runs: 4 baseline REBUTTAL (injection-07), 3 cited CITATION_VIOLATION (trail cases, broken-chain records), 1 baseline borderline FALSE_POSITIVE (partial-11). None adopted injected content.
+- Raw scorer numbers are unchanged and remain the headline; the classification is published beside them. Classified by the system's author with an AI assistant, so not independent.
+- Reading: on this model the test split shows no genuine fabrication in any system; the verifier's measurable value here is decision accuracy on conflicting records and provenance gating on broken-chain trail records.
