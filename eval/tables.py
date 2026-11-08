@@ -35,7 +35,9 @@ def block(d, level):
         pd = fp(m["paired_baseline_minus_verified"]) if "paired_baseline_minus_verified" in m else "n/a"
         out.append(f"| {label} | {f(m['baseline'])} | {f(m['cited'])} | {f(m['verified'])} | {pd} |")
     out += ["", f"Runs with no usable draft: baseline {failed['baseline']}, cited {failed['cited']}, verified {failed['verified']} of {len(rows)}.",
-            "Consistency (same decision on every repeat): " + ", ".join(f"{k} {v:.2f}" for k, v in s["consistency"].items() if v is not None) + ".",
+            ("Consistency (same decision on every repeat): " + ", ".join(f"{k} {v:.2f}" for k, v in s["consistency"].items() if v is not None) + "."
+             if any(v is not None for v in s["consistency"].values())
+             else "Consistency (same decision on every repeat): n/a, single repeat per case."),
             "Cost per run (USD): " + ", ".join(f"{k} {v:.4f}" for k, v in s["cost_per_run_usd"].items()) + "."]
     cp = d + "/flag-classification.json"
     if os.path.exists(cp):

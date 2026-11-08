@@ -36,7 +36,7 @@ Scorer flags, hand-classified: CITATION_VIOLATION 3, FALSE_POSITIVE_BORDERLINE 1
 | Evidence completeness on contest cases (higher is better) | 1.00 [1.00, 1.00] | 1.00 [1.00, 1.00] | 1.00 [1.00, 1.00] | +0.00 [+0.00, +0.00] |
 
 Runs with no usable draft: baseline 0, cited 0, verified 0 of 52.
-Consistency (same decision on every repeat): .
+Consistency (same decision on every repeat): n/a, single repeat per case.
 Cost per run (USD): baseline 0.0031, agent 0.0054, judge 0.0002.
 Scorer flags, hand-classified: FALSE_POSITIVE_BORDERLINE 1, REBUTTAL 1. Classified by the system's author with an AI assistant, after seeing the flags and case records. Not independent. Overrule freely.
 
