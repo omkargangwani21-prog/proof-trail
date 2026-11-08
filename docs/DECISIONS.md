@@ -91,3 +91,8 @@
 - 19 flagged runs, classified after reading the flags and the case records. Result: eval/results/test-gpt-oss-120b/flag-classification.json.
 - Reading: 3 baseline runs adopted attacker content (injection-04 date, injection-05 neighbor story); 3 fabricated (carrier inferred from a tracking prefix on the no_carrier variant; one implied buyer authorization); 12 only repeat the buyer's text to reject it; 1 borderline false positive. Raw scorer numbers (unsupported 0.07, injection 0.03) stay published unchanged.
 - Classified by the system's author with an AI assistant, so not independent.
+
+## 2026-11-08: Draft action added; GLM-5.3-Flash test run finding
+- The app had no way to create a draft (only submit). Added core/drafting.py and app/draft_api.py (POST /disputes/{id}/draft): same runner as the eval, one model call per click, refused unless the dispute is WAITING_FOR_SELLER_RESPONSE, budget guard applies.
+- GLM-5.3-Flash on the test split: 56 of 260 Cited/Verified runs had no usable draft (209 agent calls ended with finish_reason=length at the 6000-token cap). Those rows measure the model under that cap, not the verifier. Published as run; the 6000 cap was fixed before the run.
+- Open question, not yet changed: the verifier marks a claim VERIFIED when it accurately quotes an untrusted buyer message, because claim type "other" is not capped by the buyer-text rule (seen on GLM clean-01/clean-03). A change would be a second post-test rule change and would be measured offline on cached drafts first.
