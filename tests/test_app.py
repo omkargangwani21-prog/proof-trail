@@ -157,6 +157,8 @@ def test_abstain_is_a_legitimate_no_contest_outcome_and_keeps_paypal_request_not
     assert "Missing evidence: Proof of fulfillment." in page.text
     assert "PayPal also asked for: Proof of refund, Other. Not provided." in page.text
     assert "We recommend accepting this claim" not in page.text
+    assert "Not enough evidence to contest" in page.text
+    assert "Recommend accepting" not in page.text
     assert 'class="message message--error"' not in page.text
 
 
@@ -288,7 +290,7 @@ def test_due_labels():
 
 def test_labels():
     assert draft_state(None)[0] == "No draft"
-    assert draft_state({"status": "ABSTAIN"})[0] == "Recommend accepting"
+    assert draft_state({"status": "ABSTAIN"}) == ("Not enough evidence to contest", "review", "Review")
     assert reason_label("MERCHANDISE_OR_SERVICE_NOT_RECEIVED") == "Item not received"
     assert reason_label("SOMETHING_NEW") == "Something new"
 

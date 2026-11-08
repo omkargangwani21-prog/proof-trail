@@ -160,7 +160,7 @@ def draft_state(draft):
     if status == "VERIFIED":
         return "Draft ready", "verified", "Review"
     if status == "ABSTAIN":
-        return "Recommend accepting", "review", "Review"
+        return "Not enough evidence to contest", "review", "Review"
     return status.replace("_", " ").capitalize(), "neutral", "Review"
 
 
