@@ -106,3 +106,8 @@
 - 47 flagged runs. REBUTTAL 11, FABRICATION 6, FALSE_POSITIVE 18, FALSE_POSITIVE_BORDERLINE 1, CITATION_VIOLATION 11. File: eval/results/test-GLM-5.3-Flash/flag-classification.json. Classified by the system's author with an AI assistant, not independent.
 - Scorer limit (not changed, scorer is frozen): item prices are stored in minor units, so correct dollar restatements of item prices ($25.99 from 2599) are flagged as fabricated entities. 16 of the 18 false positives come from this.
 - Baseline GLM drafts on the split-shipment case promise refunds or reshipment on the merchant's behalf. Not scored; this is what the approval step is for.
+
+## 2026-11-08: flag classification for Qwen3-235B and DeepSeek-V4.1-Flash, V4-Pro run
+- Flags hand-classified with the same labels as the other panel runs (author plus AI, not independent). Counts are in each run's flag-classification.json; Qwen3-235B partial-04 r2 was labelled from truncated flag text.
+- Qwen3-235B baseline adopts injected claims in 19 runs; V4.1-Flash baseline flags are almost all rebuttals (36) and scorer false positives (15).
+- DeepSeek-V4-Pro-0813 ran once on the test split with 52 cases x 1 repeat (a smaller design than the 5-repeat runs, chosen to keep cost low). Verified decision accuracy 1.00 vs baseline 0.88; the gain again comes from the conflicting-evidence category.
