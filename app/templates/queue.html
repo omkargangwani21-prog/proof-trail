@@ -11,12 +11,13 @@
 @media(max-width:420px){.queue-copy{align-items:flex-start}.queue-copy p{max-width:26ch}.dispute-table tbody tr{padding-left:12px;padding-right:12px;gap:1px 8px}.dispute-table .status-cell .status{white-space:normal}.dispute-table .amount{font-size:14px}}
 @media(max-width:420px){.dispute-table .action-cell{white-space:normal;text-align:right}.dispute-table .action-cell .btn{max-width:100%;white-space:nowrap}}
 .group-row th{padding:24px 12px 10px;text-align:left;color:var(--ink);background:transparent;font-size:16px;font-weight:600;border-bottom:1px solid var(--rule-strong)}.group-row:first-child th{padding-top:10px}.group-row th span{margin-left:7px;color:var(--muted);font:400 12px/1.4 var(--mono)}@media(max-width:900px){.dispute-table tbody tr.group-row{display:block;padding:16px 0 0;background:transparent;border:0}.dispute-table tbody tr.group-row th{display:block;padding:0 2px 9px;border-bottom:1px solid var(--rule-strong)}}
+.queue-tabs{display:flex;gap:22px;border-bottom:1px solid var(--rule);margin-top:18px}.queue-tabs a{position:relative;padding:10px 0;color:var(--muted);text-decoration:none;font-size:14px}.queue-tabs a[aria-current=page]{color:var(--ink);font-weight:600}.queue-tabs a[aria-current=page]:after{position:absolute;bottom:-1px;left:0;right:0;height:2px;background:var(--accent-ink);content:""}.origin-tag,.new-tag{display:inline-block;margin-left:7px;padding:2px 6px;border:1px solid var(--rule-strong);color:var(--muted);font-size:11px;font-weight:600;line-height:1.3;vertical-align:middle}.new-tag{color:var(--accent-ink);border-color:var(--accent-ink)}
 </style>
 {% endblock %}
 {% macro row(r) -%}
-<tr{% if r.is_action %} class="needs-action"{% endif %}>
+<tr data-pid="{{ r.pid }}"{% if r.is_action %} class="needs-action"{% endif %}>
  <td class="deadline-cell" data-label="Respond by"><div class="deadline">{% if r.is_action %}<strong>{{ r.due }}</strong>{% else %}<span class="muted">—</span>{% endif %}{% if r.is_action and r.due_tone == "removed" %}<span class="status status--removed">{{ icon("alert") }}<span>Deadline passed</span></span>{% endif %}</div></td>
- <td class="why-cell" data-label="Dispute"><span class="dispute-title">{{ r.why }}</span><span class="dispute-id mono">{{ r.pid }}</span></td>
+ <td class="why-cell" data-label="Dispute"><span class="dispute-title">{{ r.why }}{% if r.is_sample %}<span class="origin-tag">Synthetic sample</span>{% endif %}</span><span class="dispute-id mono">{{ r.pid }}</span></td>
  <td class="amount" data-label="Amount">{{ r.amount }}</td>
  <td class="status-cell" data-label="Status">{{ status(r.state_tone|upper, r.state) }}</td>
  <td class="action-cell" data-label="Action"><a class="btn {% if not r.is_action %}btn--quiet{% endif %} btn--small" href="/disputes/{{ r.pid }}" aria-label="{{ r.cta }} dispute {{ r.pid }}">{{ r.cta }}{% if r.is_action %} {{ icon("arrow") }}{% endif %}</a></td>
@@ -24,10 +25,12 @@
 {%- endmacro %}
 {% block content %}
 <header class="page-head"><div class="title-group"><h1>Disputes</h1><p>Review the response deadline, then open a case to check its evidence.</p></div><div class="actions"><a class="btn btn--quiet btn--small" href="/disputes">Refresh</a></div></header>
+<nav class="queue-tabs" aria-label="Dispute origin filter"><a href="/disputes?filter=all"{% if queue_filter == "all" %} aria-current="page"{% endif %}>All</a><a href="/disputes?filter=sandbox"{% if queue_filter == "sandbox" %} aria-current="page"{% endif %}>Live sandbox</a><a href="/disputes?filter=samples"{% if queue_filter == "samples" %} aria-current="page"{% endif %}>Samples</a></nav>
 {% if draft_feedback %}<div class="message message--error" role="alert">{{ draft_feedback }}</div>{% endif %}
+<div id="queueResults" aria-live="polite">
 {% if state == "error" %}<div class="message message--error" role="alert">{{ error_message }}</div>
 {% elif state == "loading" %}<p class="queue-copy" role="status">Loading disputes…</p><div class="table-loading" aria-hidden="true">{% for _ in range(5) %}<div class="loading-block"><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span></div>{% endfor %}</div>
-{% elif not action and not other %}<section class="empty-state" aria-labelledby="empty-title"><div class="empty-mark">{{ icon("receipt") }}<span>Disputes</span></div><h2 id="empty-title">No disputes yet</h2><p>A dispute created on a PayPal sandbox payment will appear here with its response deadline.</p></section>
+{% elif not action and not other %}<section class="empty-state" aria-labelledby="empty-title"><div class="empty-mark">{{ icon("receipt") }}<span>Disputes</span></div><h2 id="empty-title">{% if queue_filter == "samples" %}No synthetic samples{% elif queue_filter == "sandbox" %}No live sandbox disputes{% else %}No disputes yet{% endif %}</h2><p>{% if queue_filter == "all" %}A dispute created on a PayPal sandbox payment will appear here with its response deadline.{% else %}No disputes match this filter.{% endif %}</p></section>
 {% else %}
 {% set dispute_total = action|length + other|length %}<div class="queue-copy"><p>{{ dispute_total }} {{ pluralize(dispute_total, "dispute") }} on file{% if action %}. {{ action|length }} {{ "needs" if action|length == 1 else "need" }} a response, soonest deadline first.{% else %}. No disputes need a response.{% endif %}</p></div>
 <table class="dispute-table" aria-label="Disputes">
@@ -37,6 +40,12 @@
 {% if other %}<tr class="group-row group-row--secondary"><th colspan="5" scope="rowgroup">Answered or under review <span>{{ other|length }}</span></th></tr>{% for r in other %}{{ row(r) }}{% endfor %}{% endif %}
 </tbody></table>
 {% endif %}
+ </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(()=>{const root=document.getElementById('queueResults');if(!root)return;const known=new Set([...root.querySelectorAll('tr[data-pid]')].map(row=>row.dataset.pid));const newlySeen=new Set();let busy=false;const refresh=async()=>{if(busy||document.hidden)return;busy=true;try{const url=new URL(location.href);url.searchParams.set('partial','1');const response=await fetch(url,{headers:{'X-Requested-With':'fetch'}});if(!response.ok)return;const page=new DOMParser().parseFromString(await response.text(),'text/html');const incoming=page.getElementById('queueResults');if(!incoming)return;for(const row of incoming.querySelectorAll('tr[data-pid]')){const id=row.dataset.pid;if(!known.has(id))newlySeen.add(id);if(newlySeen.has(id)){const title=row.querySelector('.dispute-title');if(title&&!title.querySelector('.new-tag')){const marker=document.createElement('span');marker.className='new-tag';marker.textContent='New';title.append(' ',marker)}}}root.replaceChildren(...incoming.childNodes);for(const row of root.querySelectorAll('tr[data-pid]')){const id=row.dataset.pid;if(!known.has(id))newlySeen.add(id);if(newlySeen.has(id)){const title=row.querySelector('.dispute-title');if(title&&!title.querySelector('.new-tag')){const marker=document.createElement('span');marker.className='new-tag';marker.textContent='New';title.append(' ',marker)}}} }catch(_error){/* Keep the current list visible when refresh is temporarily unavailable. */}finally{busy=false}};window.setInterval(refresh,20000)})();
+</script>
 {% endblock %}
 
 

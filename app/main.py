@@ -11,13 +11,14 @@ from core.db import connect
 from core import trail
 from core.paypal_client import PayPalClient, SANDBOX_BASE
 from dotenv import load_dotenv
+from app import ingest_api
 from app.ingest_api import router as ingest_router
 from app.draft_api import router as draft_router
 from core.submitter import EXTRA_SCHEMA, NotApproved, NotSubmittable, approve, submit
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-app = FastAPI(title="ProofTrail")
+app = FastAPI(title="ProofTrail", lifespan=ingest_api.lifespan)
 app.include_router(ingest_router)
 app.include_router(draft_router)
 ACTION_STATUSES = {"WAITING_FOR_SELLER_RESPONSE", "OPEN"}
@@ -84,9 +85,9 @@ def configured_submit_mode():
     return "dry-run"
 
 
-def common(conn, active, dev_fixture=False):
+def common(conn, active, dev_fixture=False, force_dry_run=False):
     mode = os.environ.get("PT_MODE", "live-sandbox")
-    submit_mode = configured_submit_mode()
+    submit_mode = "dry-run" if force_dry_run else configured_submit_mode()
     return {
         "active": active,
         "mode": mode, "mode_label": MODES.get(mode, mode), "pages": PAGES,
@@ -199,6 +200,7 @@ def queue_row(d, draft, now=None):
         "amount": f"{d['amount_minor'] / 100:.2f} {d['currency']}",
         "due": due, "due_tone": due_tone, "state": state, "state_tone": state_tone,
         "cta": cta, "due_sort": d["due_at"] or "9999", "is_action": is_action,
+        "origin": d["origin"] or "sandbox", "is_sample": d["origin"] == "synthetic_sample",
     }
 
 
@@ -234,10 +236,12 @@ async def root():
 
 
 @app.get("/disputes", response_class=HTMLResponse)
-async def disputes(request: Request, fixture: str | None = None):
+async def disputes(request: Request, fixture: str | None = None, filter: str = "all"):
+    if filter not in {"all", "sandbox", "samples"}:
+        filter = "all"
     use_fixture = FIXTURES_ENABLED and fixture == "queue"
     if FIXTURES_ENABLED and fixture == "loading":
-        ctx = common(None, "disputes", True) | {"state": "loading", "action": [], "other": []}
+        ctx = common(None, "disputes", True) | {"state": "loading", "action": [], "other": [], "queue_filter": filter}
         return templates.TemplateResponse(request, "queue.html", ctx)
     if FIXTURES_ENABLED and fixture == "error":
         return templates.TemplateResponse(request, "queue.html", error_context(
@@ -245,7 +249,7 @@ async def disputes(request: Request, fixture: str | None = None):
         ) | {"action": [], "other": []})
     if FIXTURES_ENABLED and fixture == "empty":
         return templates.TemplateResponse(request, "queue.html", common(None, "disputes", True) | {
-            "state": "empty", "action": [], "other": []
+            "state": "empty", "action": [], "other": [], "queue_filter": filter
         })
 
     conn = None
@@ -254,19 +258,33 @@ async def disputes(request: Request, fixture: str | None = None):
         if use_fixture:
             data = get_fixture("queue")
             action, other = data["action"], data["other"]
+            for row in action + other:
+                row["origin"] = "synthetic_sample" if row["pid"] == "PP-DEV-1002" else "sandbox"
+                row["is_sample"] = row["origin"] == "synthetic_sample"
+            if filter == "sandbox":
+                action, other = ([r for r in action if not r["is_sample"]],
+                                 [r for r in other if not r["is_sample"]])
+            elif filter == "samples":
+                action, other = ([r for r in action if r["is_sample"]],
+                                 [r for r in other if r["is_sample"]])
         else:
             action, other = [], []
             for dispute in conn.execute("SELECT * FROM disputes ORDER BY id DESC"):
+                if filter == "sandbox" and dispute["origin"] != "sandbox":
+                    continue
+                if filter == "samples" and dispute["origin"] != "synthetic_sample":
+                    continue
                 row = queue_row(dispute, latest_draft(conn, dispute["paypal_dispute_id"]))
                 (action if row["is_action"] else other).append(row)
             action.sort(key=lambda row: row["due_sort"])
         ctx = common(conn, "disputes", use_fixture) | {
             "state": "success" if action or other else "empty", "action": action, "other": other,
+            "queue_filter": filter if filter in {"all", "sandbox", "samples"} else "all",
         } | draft_feedback(request, queue=True)
     except Exception:
         ctx = error_context(request, "disputes",
                             "Disputes could not be loaded. Check the local database, then refresh.", use_fixture) | {
-            "action": [], "other": []
+            "action": [], "other": [], "queue_filter": filter
         }
     finally:
         if conn is not None:
@@ -366,9 +384,10 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
     requested_not_provided = [evidence_type_label(item) for item in (verification or {}).get("requested_not_provided", [])]
     consistency = (verification or {}).get("consistency_issues", [])
     reasons = (verification or {}).get("recommendation")
-    conn_common = common(conn, "disputes", dev_fixture)
+    is_sample = d.get("origin") == "synthetic_sample"
+    conn_common = common(conn, "disputes", dev_fixture, force_dry_run=is_sample)
     return conn_common | {
-        "state": "partial" if partial else "success", "d": d, "due_display": display_ts(d.get("due_at")) if d.get("due_at") else "Not provided",
+        "state": "partial" if partial else "success", "d": d, "is_sample": is_sample, "due_display": display_ts(d.get("due_at")) if d.get("due_at") else "Not provided",
         "why": reason_label(d.get("reason", "Dispute")), "status_label": paypal_status_label(d.get("status")), "timeline": timeline,
         "records": records, "record_json": json.dumps(records, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"),
         "messages": [r["content"].get("text", "") for r in records.values() if r["kind"] == "buyer_message"],
@@ -447,11 +466,17 @@ async def dispute_workspace(request: Request, pid: str, fixture: str | None = No
 @app.post("/disputes/{pid}/submit")
 async def submit_dry_run(request: Request, pid: str, draft_id: int = Form(...), approved: str | None = Form(None)):
     dry_run = configured_submit_mode() == "dry-run"
-    if approved != "yes":
-        message = "Approval is required before a dry run." if dry_run else "Approval is required before sandbox submission."
-        return RedirectResponse(f"/disputes/{pid}?error={message.replace(' ', '+')}", status_code=303)
     conn = open_db()
     try:
+        dispute = conn.execute("SELECT origin FROM disputes WHERE paypal_dispute_id=?", (pid,)).fetchone()
+        if not dispute:
+            return RedirectResponse(f"/disputes/{pid}?error=Dispute+not+found.", status_code=303)
+        # Generated samples must never reach PayPal, regardless of environment configuration.
+        if dispute["origin"] != "sandbox":
+            dry_run = True
+        if approved != "yes":
+            message = "Approval is required before a dry run." if dry_run else "Approval is required before sandbox submission."
+            return RedirectResponse(f"/disputes/{pid}?error={message.replace(' ', '+')}", status_code=303)
         row = conn.execute("SELECT id,paypal_dispute_id,status FROM draft_evidence WHERE id=? AND paypal_dispute_id=?",
                            (draft_id, pid)).fetchone()
         if not row:

@@ -387,6 +387,90 @@ def test_submit_action_label_follows_mode(monkeypatch):
     assert context["action_label"] == "Review and submit (dry run)"
 
 
+def test_origin_tabs_and_new_marker_refresh_markup(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    seed_dispute(conn, "PP-LIVE-1")
+    seed_dispute(conn, "PP-SAMPLE-1")
+    conn.execute("UPDATE disputes SET origin='sandbox' WHERE paypal_dispute_id='PP-LIVE-1'")
+    conn.execute("UPDATE disputes SET origin='synthetic_sample' WHERE paypal_dispute_id='PP-SAMPLE-1'")
+    conn.commit()
+    conn.close()
+
+    all_page = client.get("/disputes")
+    assert "PP-LIVE-1" in all_page.text and "PP-SAMPLE-1" in all_page.text
+    assert all_page.text.count("Synthetic sample") == 1
+    assert 'href="/disputes?filter=all" aria-current="page"' in all_page.text
+    assert 'setInterval(refresh,20000)' in all_page.text
+    assert "new-tag" in all_page.text and "data-pid" in all_page.text
+    live_page = client.get("/disputes?filter=sandbox")
+    assert "PP-LIVE-1" in live_page.text and "PP-SAMPLE-1" not in live_page.text
+    sample_page = client.get("/disputes?filter=samples")
+    assert "PP-SAMPLE-1" in sample_page.text and "PP-LIVE-1" not in sample_page.text
+    assert 'href="/disputes?filter=samples" aria-current="page"' in sample_page.text
+
+
+def test_synthetic_sample_detail_forces_dry_run_copy_and_server_mode(tmp_path, monkeypatch):
+    monkeypatch.setenv("PT_SUBMIT_MODE", "sandbox-submit")
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn, "PP-SAMPLE-2")
+    conn.execute("UPDATE disputes SET origin='synthetic_sample' WHERE paypal_dispute_id=?", (dispute["dispute_id"],))
+    verification = {"decision": "CONTEST", "missing_evidence": [], "requested_not_provided": [], "claims": []}
+    payload = [{"evidence_type": "PROOF_OF_FULFILLMENT", "evidence_info": {"tracking_info": []}, "notes": "Synthetic"}]
+    draft_id = conn.execute(
+        "INSERT INTO draft_evidence(paypal_dispute_id,decision,payload_json,verification_json,status,created_at) VALUES(?,?,?,?,?,?)",
+        (dispute["dispute_id"], "CONTEST", json.dumps(payload), json.dumps(verification), "VERIFIED", "2026-11-08"),
+    ).lastrowid
+    conn.commit()
+    conn.close()
+
+    page = client.get(f"/disputes/{dispute['dispute_id']}")
+    assert "Synthetic sample" in page.text
+    assert "Generated for demonstration. Submissions are dry run only." in page.text
+    assert "Approve and run dry run" in page.text
+    assert "Approve and submit to PayPal sandbox" not in page.text
+
+    calls = []
+    monkeypatch.setattr("app.main.approve", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.main.submit", lambda *args, **kwargs: calls.append(kwargs["dry_run"]))
+    result = client.post(f"/disputes/{dispute['dispute_id']}/submit",
+                         data={"draft_id": draft_id, "approved": "yes"}, follow_redirects=False)
+    assert result.status_code == 303
+    assert calls == [True]
+
+
+def test_app_uses_opt_in_ingest_lifespan_without_polling_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("PT_AUTOPOLL", raising=False)
+    monkeypatch.setenv("PT_MODE", "live-sandbox")
+    make(tmp_path, monkeypatch)
+    from app import ingest_api
+    from app.main import app
+    started = []
+
+    async def unexpected_poll():
+        started.append(True)
+
+    monkeypatch.setattr(ingest_api, "_poll_loop", unexpected_poll)
+    with TestClient(app):
+        pass
+    assert not started
+    import threading
+    monkeypatch.setenv("PT_AUTOPOLL", "1")
+    polled = threading.Event()
+
+    async def fake_poll_loop():
+        polled.set()
+        import asyncio
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(ingest_api, "_poll_loop", fake_poll_loop)
+    with TestClient(app):
+        assert polled.wait(1)
+
+
 
 def test_trail_empty_state_and_dev_fixture(tmp_path, monkeypatch):
     client = make(tmp_path, monkeypatch)
