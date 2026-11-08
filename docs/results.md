@@ -24,6 +24,22 @@ Scorer flags, hand-classified: CITATION_VIOLATION 3, FALSE_POSITIVE_BORDERLINE 1
 
 ## Cross-model panel (separate from the headline; never merged with it)
 
+### deepseek-ai/DeepSeek-V4.1-Flash
+
+52 cases x 5 repeats = 260 runs per system. Commit 5d4d4d1c. Single run.
+
+| Metric | Baseline | Cited | Verified | Paired difference (baseline - verified) |
+|---|---|---|---|---|
+| Decision accuracy (higher is better) | 0.94 [0.87, 0.99] | 0.90 [0.84, 0.96] | 0.99 [0.97, 1.00] | -0.05 [-0.12, +0.00] |
+| Runs with at least one unsupported claim, scorer count (lower is better) | 0.16 [0.08, 0.25] | 0.02 [0.00, 0.05] | 0.01 [0.00, 0.03] | +0.15 [+0.07, +0.24] |
+| Injected text in the payload, scorer count (lower is better) | 0.13 [0.05, 0.22] | 0.00 [0.00, 0.00] | 0.00 [0.00, 0.00] | +0.13 [+0.05, +0.22] |
+| Evidence completeness on contest cases (higher is better) | 1.00 [1.00, 1.00] | 0.98 [0.96, 1.00] | 0.98 [0.96, 1.00] | +0.02 [+0.00, +0.04] |
+
+Runs with no usable draft: baseline 1, cited 0, verified 0 of 260.
+Consistency (same decision on every repeat): baseline 0.94, cited 0.73, verified 0.88.
+Cost per run (USD): baseline 0.0012, agent 0.0031, judge 0.0004.
+Scorer flags, hand-classified: not classified yet.
+
 ### zai-org/GLM-5.3-Flash
 
 52 cases x 5 repeats = 260 runs per system. Commit 08529f69. Single run.
@@ -44,6 +60,22 @@ Notes:
 - partial-05/11 flags: item prices are stored as unit_minor; GLM's dollar figures are correct conversions the frozen scorer does not recognise.
 - Not scored: baseline partial-05 drafts promise refunds or reshipment on the merchant's behalf (consistent with policy, but unapproved commitments).
 - Cited and Verified rows for GLM are dominated by 56 of 260 runs with no usable draft (finish_reason=length at the 6000-token cap).
+
+### Qwen/Qwen3-235B-A22B-Instruct-2507
+
+52 cases x 5 repeats = 260 runs per system. Commit 3c7a7f96. Single run.
+
+| Metric | Baseline | Cited | Verified | Paired difference (baseline - verified) |
+|---|---|---|---|---|
+| Decision accuracy (higher is better) | 0.68 [0.56, 0.81] | 0.83 [0.73, 0.92] | 0.97 [0.94, 1.00] | -0.29 [-0.42, -0.16] |
+| Runs with at least one unsupported claim, scorer count (lower is better) | 0.18 [0.10, 0.29] | 0.05 [0.01, 0.11] | 0.00 [0.00, 0.00] | +0.18 [+0.09, +0.28] |
+| Injected text in the payload, scorer count (lower is better) | 0.10 [0.03, 0.18] | 0.00 [0.00, 0.00] | 0.00 [0.00, 0.00] | +0.10 [+0.03, +0.18] |
+| Evidence completeness on contest cases (higher is better) | 0.99 [0.96, 1.00] | 0.99 [0.96, 1.00] | 0.99 [0.96, 1.00] | +0.00 [-0.04, +0.04] |
+
+Runs with no usable draft: baseline 0, cited 5, verified 5 of 260.
+Consistency (same decision on every repeat): baseline 0.98, cited 0.90, verified 0.92.
+Cost per run (USD): baseline 0.0002, agent 0.0006, judge 0.0003.
+Scorer flags, hand-classified: not classified yet.
 
 ### Qwen/Qwen3-30B-A3B-Instruct-2507
 
