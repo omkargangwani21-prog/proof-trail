@@ -90,7 +90,7 @@ class Gateway:
         cost = (tin * pin + tout * pout) / 1e6
         d = {"text": r.choices[0].message.content or "", "in_tokens": tin, "out_tokens": tout,
              "finish_reason": r.choices[0].finish_reason, "model": model, "latency_ms": lat}
-        if cache:
+        if cache and (d.get("text") or "").strip() and d.get("finish_reason") != "length":  # never cache dead replies
             self.conn.execute("INSERT OR REPLACE INTO llm_cache(key,response_json,created_at) VALUES(?,?,?)",
                               (key, json.dumps(d), datetime.datetime.now(datetime.timezone.utc).isoformat()))
         self._log(run_id, model, role, ph, tin, tout, cost, lat, False, d["finish_reason"])

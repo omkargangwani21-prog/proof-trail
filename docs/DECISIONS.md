@@ -111,3 +111,8 @@
 - Flags hand-classified with the same labels as the other panel runs (author plus AI, not independent). Counts are in each run's flag-classification.json; Qwen3-235B partial-04 r2 was labelled from truncated flag text.
 - Qwen3-235B baseline adopts injected claims in 19 runs; V4.1-Flash baseline flags are almost all rebuttals (36) and scorer false positives (15).
 - DeepSeek-V4-Pro-0813 ran once on the test split with 52 cases x 1 repeat (a smaller design than the 5-repeat runs, chosen to keep cost low). Verified decision accuracy 1.00 vs baseline 0.88; the gain again comes from the conflicting-evidence category.
+
+## 2026-11-08: a draft failed on the live app; fixes limited to caching and app-side retries
+- Live dispute OFG: attempt 1 returned an empty reply after spending all 6,000 output tokens (finish_reason length); attempt 2 was valid JSON but left out the required `confidence` field on every claim, so validation rejected it. Both replies were cached, so clicking "Draft again" replayed the failure.
+- The drafter schema was NOT changed (it is what the frozen eval used, and nothing downstream reads `confidence`; making it optional would change what counts as a usable draft, a post-test change). The eval's "no usable draft" counts include this kind of failure.
+- Changed: the gateway no longer caches empty or length-truncated replies; the app's `draft_dispute` retries up to 3 times with a fresh cache key. The eval runner is unchanged.

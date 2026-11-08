@@ -1,9 +1,19 @@
-"""Create a draft for a stored dispute with the same runner the eval uses. One model call per click."""
+"""Create a draft for a stored dispute with the same runner the eval uses.
+
+If a run yields no usable draft (an empty reply after a reasoning overrun, a missing required field),
+retry up to TRIES times in total, each retry with a fresh cache key so nothing is replayed."""
+import inspect
 import json
 from core.pipeline import run_case
 from core.submitter import save_draft
 
 MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
+TRIES = 3
+
+
+def _accepts_salt(run):
+    ps = inspect.signature(run).parameters
+    return "cache_salt" in ps or any(p.kind == p.VAR_KEYWORD for p in ps.values())
 
 
 class DisputeNotFound(Exception):
@@ -23,8 +33,14 @@ def draft_dispute(conn, dispute_id, gw=None, model=MODEL, run=run_case):
     if gw is None:
         from core.gateway import Gateway
         gw = Gateway(conn)
-    r = run(conn, gw, json.loads(row["raw_json"]), model)
-    if not r["draft_result"]["ok"] or r["verification"] is None:
+    dispute = json.loads(row["raw_json"])
+    r = None
+    for i in range(TRIES):
+        kw = {"cache_salt": f"retry-{i}"} if i and _accepts_salt(run) else {}
+        r = run(conn, gw, dispute, model, **kw)
+        if r["draft_result"]["ok"] and r["verification"] is not None:
+            break
+    else:
         return {"ok": False, "reason": "The model did not return a usable draft. Nothing was saved."}
     v = r["verification"]
     return {"ok": True, "draft_id": save_draft(conn, r["bundle"], v), "decision": v["decision"]}
