@@ -1,0 +1,12 @@
+{
+  "split": "test",
+  "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+  "repeats": 5,
+  "commit": "3c7a7f961767a3730ad2dd984e2b0c8b9f963144",
+  "manifest": {
+    "dev": "88e394115e37a6646dedab3d9d2e0b20cb6d553540d1409a3e97d81c2ae5c68f",
+    "test": "9e8476854fb5ab44940f93946ad08f6d80e06599be6cebffe7ee350666d1d3b5"
+  },
+  "max_tokens": 6000,
+  "started": "20261108-074008"
+}
