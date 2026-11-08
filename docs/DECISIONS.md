@@ -101,3 +101,8 @@
 - The app had no way to create a draft (only submit). Added core/drafting.py and app/draft_api.py (POST /disputes/{id}/draft): same runner as the eval, one model call per click, refused unless the dispute is WAITING_FOR_SELLER_RESPONSE, budget guard applies.
 - GLM-5.3-Flash on the test split: 56 of 260 Cited/Verified runs had no usable draft (209 agent calls ended with finish_reason=length at the 6000-token cap). Those rows measure the model under that cap, not the verifier. Published as run; the 6000 cap was fixed before the run.
 - Open question, not yet changed: the verifier marks a claim VERIFIED when it accurately quotes an untrusted buyer message, because claim type "other" is not capped by the buyer-text rule (seen on GLM clean-01/clean-03). A change would be a second post-test rule change and would be measured offline on cached drafts first.
+
+## 2026-11-08: Hand classification of flagged test runs (GLM-5.3-Flash) and a scorer limit
+- 47 flagged runs. REBUTTAL 11, FABRICATION 6, FALSE_POSITIVE 18, FALSE_POSITIVE_BORDERLINE 1, CITATION_VIOLATION 11. File: eval/results/test-GLM-5.3-Flash/flag-classification.json. Classified by the system's author with an AI assistant, not independent.
+- Scorer limit (not changed, scorer is frozen): item prices are stored in minor units, so correct dollar restatements of item prices ($25.99 from 2599) are flagged as fabricated entities. 16 of the 18 false positives come from this.
+- Baseline GLM drafts on the split-shipment case promise refunds or reshipment on the merchant's behalf. Not scored; this is what the approval step is for.
