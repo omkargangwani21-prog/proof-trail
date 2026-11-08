@@ -1,6 +1,6 @@
 """How disputes get into ProofTrail: fetch by id, poll, or webhook. All paths end in ingest_dispute (GET by id)."""
 import datetime, json
-from core.case_builder import upsert_dispute
+from core.case_builder import build_case, upsert_dispute
 from core.paypal_client import PayPalError
 
 SCHEMA = """CREATE TABLE IF NOT EXISTS webhook_events(
@@ -14,7 +14,9 @@ def _now():
 
 def ingest_dispute(conn, client, dispute_id, origin="sandbox"):
     d = client.get_dispute(dispute_id)
-    upsert_dispute(conn, d, origin)
+    did = upsert_dispute(conn, d, origin)
+    if not conn.execute("SELECT 1 FROM cases WHERE dispute_id=?", (did,)).fetchone():
+        build_case(conn, d, origin)  # records exist as soon as the dispute does; never rebuilt here, drafts point at the case
     conn.commit()
     return {"dispute_id": d["dispute_id"], "status": d["status"], "stage": d.get("dispute_life_cycle_stage")}
 
