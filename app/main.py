@@ -12,12 +12,14 @@ from core import trail
 from core.paypal_client import PayPalClient, SANDBOX_BASE
 from dotenv import load_dotenv
 from app.ingest_api import router as ingest_router
+from app.draft_api import router as draft_router
 from core.submitter import EXTRA_SCHEMA, NotApproved, NotSubmittable, approve, submit
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app = FastAPI(title="ProofTrail")
 app.include_router(ingest_router)
+app.include_router(draft_router)
 ACTION_STATUSES = {"WAITING_FOR_SELLER_RESPONSE", "OPEN"}
 SUBMITTED_STATUSES = {"SUBMITTED", "SUBMITTED_DRY_RUN"}
 PAGES = {}
@@ -42,6 +44,27 @@ def evidence_type_label(value):
     known = {"PROOF_OF_REFUND": "Proof of refund", "PROOF_OF_FULFILLMENT": "Proof of fulfillment",
              "OTHER": "Other"}
     return known.get(str(value), str(value).replace("_", " ").capitalize())
+
+
+def pluralize(count, singular, plural=None):
+    return singular if count == 1 else (plural or f"{singular}s")
+
+
+templates.env.globals["pluralize"] = pluralize
+
+
+def source_bundle_partial(records, verification):
+    if not records:
+        return True
+    if not any(record.get("kind") == "order" for record in records.values()):
+        return True
+    if not any(record.get("kind") == "shipment" for record in records.values()):
+        return True
+    return any(
+        ref.get("record_id") not in records
+        for item in (verification or {}).get("claims", [])
+        for ref in item.get("claim", {}).get("source_refs", [])
+    )
 
 def reason_label(code):
     return REASONS.get(code) or str(code).replace("_", " ").capitalize()
@@ -160,7 +183,7 @@ def get_fixture(name):
         return fixtures.queue_data()
     if name == "unauthorised":
         return fixtures.unauthorised_case_data()
-    if name in {"verified", "abstain", "partial", "submitted"}:
+    if name in {"verified", "abstain", "partial", "submitted", "before"}:
         return fixtures.case_data(name)
     return None
 
@@ -181,6 +204,28 @@ def queue_row(d, draft, now=None):
 
 def error_context(request, active, message, dev_fixture=False):
     return common(None, active, dev_fixture) | {"state": "error", "error_message": message}
+
+
+DRAFT_FEEDBACK = {
+    "ok": ("Draft ready. Review each claim before approving.", "success"),
+    "failed": ("The model did not return a usable draft. Nothing was saved. Try again.", "error"),
+    "notready": ("This dispute is not waiting for your response.", "error"),
+    "budget": ("Drafting is paused: the model usage limit has been reached.", "error"),
+    "error": ("Something went wrong while drafting. Nothing was saved.", "error"),
+}
+QUEUE_DRAFT_FEEDBACK = {
+    "invalid": "That dispute ID is not valid.",
+    "notfound": "The dispute was not found.",
+}
+
+
+def draft_feedback(request, queue=False):
+    value = request.query_params.get("draft", "")
+    if queue:
+        message = QUEUE_DRAFT_FEEDBACK.get(value)
+        return {"draft_feedback": message, "draft_feedback_tone": "error"} if message else {}
+    result = DRAFT_FEEDBACK.get(value)
+    return {"draft_feedback": result[0], "draft_feedback_tone": result[1]} if result else {}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -217,7 +262,7 @@ async def disputes(request: Request, fixture: str | None = None):
             action.sort(key=lambda row: row["due_sort"])
         ctx = common(conn, "disputes", use_fixture) | {
             "state": "success" if action or other else "empty", "action": action, "other": other,
-        }
+        } | draft_feedback(request, queue=True)
     except Exception:
         ctx = error_context(request, "disputes",
                             "Disputes could not be loaded. Check the local database, then refresh.", use_fixture) | {
@@ -257,7 +302,7 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
         records = source_records(conn, draft["case_id"] if draft else _case_id(conn, d["paypal_dispute_id"]))
         verification = json.loads(draft["verification_json"]) if draft and draft["verification_json"] else None
         payload = json.loads(draft["payload_json"]) if draft and draft["payload_json"] else []
-        partial = (not records or not any(r["kind"] == "order" for r in records.values()) or not any(r["kind"] == "shipment" for r in records.values()) or any(not ref.get("record") for item in (verification or {}).get("claims", []) for ref in item.get("claim", {}).get("source_refs", [])))
+        partial = source_bundle_partial(records, verification)
         draft_status = draft["status"] if draft else None
         dev_fixture = False
 
@@ -305,7 +350,7 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
                     for r in trail_records]
     trail_states = {r.get("content", {}).get("chain_status") for r in trail_records}
     if trail_records and trail_states == {"VERIFIED"}:
-        trail_chain_label = f"Chain intact, {len(trail_records)} events"
+        trail_chain_label = f"Chain intact, {len(trail_records)} {pluralize(len(trail_records), 'event')}"
     elif "BROKEN" in trail_states:
         trail_chain_label = "Trail chain check failed"
     elif trail_records:
@@ -313,7 +358,11 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
     else:
         trail_chain_label = None
     submitted = draft_status in SUBMITTED_STATUSES
+    has_draft = draft is not None or bool(fixture_data and fixture_data.get("draft_id")) or verification is not None
+    can_draft = d.get("status") == "WAITING_FOR_SELLER_RESPONSE" and not has_draft
+    can_redraft = d.get("status") == "WAITING_FOR_SELLER_RESPONSE" and has_draft and not submitted
     missing = (verification or {}).get("missing_evidence", [])
+    missing_labels = [evidence_type_label(item) for item in missing]
     requested_not_provided = [evidence_type_label(item) for item in (verification or {}).get("requested_not_provided", [])]
     consistency = (verification or {}).get("consistency_issues", [])
     reasons = (verification or {}).get("recommendation")
@@ -325,6 +374,7 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
         "messages": [r["content"].get("text", "") for r in records.values() if r["kind"] == "buyer_message"],
         "verification": verification, "claims": normalized_claims, "counts": counts,
         "missing": missing, "requested_not_provided": requested_not_provided,
+        "missing_labels": missing_labels, "can_draft": can_draft, "can_redraft": can_redraft,
         "consistency": consistency, "recommendation": reasons,
         "trail_events": trail_events, "trail_chain_label": trail_chain_label,
         "stage_label": str(d.get("stage") or "Not provided").replace("_", " ").title(),
@@ -336,7 +386,7 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
         "success_message": ("Dry run complete. No request was sent to PayPal." if draft_status == "SUBMITTED_DRY_RUN"
                             else "Submitted to PayPal sandbox." if draft_status == "SUBMITTED" else None),
         "error_message": request.query_params.get("error"),
-    }
+    } | draft_feedback(request)
 
 
 def _case_id(conn, pid):
@@ -347,7 +397,7 @@ def _case_id(conn, pid):
 
 @app.get("/disputes/{pid}", response_class=HTMLResponse)
 async def dispute_workspace(request: Request, pid: str, fixture: str | None = None):
-    fixture_data = get_fixture(fixture) if FIXTURES_ENABLED and fixture in {"verified", "abstain", "partial", "submitted", "unauthorised"} else None
+    fixture_data = get_fixture(fixture) if FIXTURES_ENABLED and fixture in {"verified", "abstain", "partial", "submitted", "unauthorised", "before"} else None
     if fixture_data:
         ctx = workspace_context(request, None, fixture_data["dispute"], None, fixture_data)
         return templates.TemplateResponse(request, "workspace.html", ctx)
@@ -359,13 +409,13 @@ async def dispute_workspace(request: Request, pid: str, fixture: str | None = No
             "missing": [], "consistency": [], "payload": [], "payload_text": "[]", "draft_id": None,
             "draft_status": None, "submitted": False, "is_abstain": False, "verification": None,
             "partial": False,
-        })
+        } | draft_feedback(request))
     if FIXTURES_ENABLED and fixture == "error":
         return templates.TemplateResponse(request, "workspace.html", error_context(
             request, "disputes", "This case could not be loaded. Return to disputes and try again.", True
         ) | {"d": {"paypal_dispute_id": pid}, "why": "Dispute unavailable", "timeline": [], "records": {},
              "record_json": "{}", "messages": [], "claims": [], "counts": {"VERIFIED": 0, "NEEDS_REVIEW": 0, "REMOVED": 0},
-             "missing": [], "consistency": [], "payload": [], "payload_text": "[]", "submitted": False})
+             "missing": [], "consistency": [], "payload": [], "payload_text": "[]", "submitted": False} | draft_feedback(request))
 
     conn = None
     try:
@@ -378,6 +428,7 @@ async def dispute_workspace(request: Request, pid: str, fixture: str | None = No
                 "claims": [], "counts": {"VERIFIED": 0, "NEEDS_REVIEW": 0, "REMOVED": 0}, "missing": [],
                 "consistency": [], "payload": [], "payload_text": "[]", "submitted": False,
                 "empty_message": "This dispute is not in the local case file. Return to disputes and refresh the list.",
+                **draft_feedback(request),
             }, status_code=404)
         draft = latest_draft(conn, pid)
         ctx = workspace_context(request, conn, dispute, draft)
@@ -386,7 +437,7 @@ async def dispute_workspace(request: Request, pid: str, fixture: str | None = No
             "d": {"paypal_dispute_id": pid}, "why": "Dispute unavailable", "timeline": [], "records": {},
             "record_json": "{}", "messages": [], "claims": [], "counts": {"VERIFIED": 0, "NEEDS_REVIEW": 0, "REMOVED": 0},
             "missing": [], "consistency": [], "payload": [], "payload_text": "[]", "submitted": False,
-        }
+        } | draft_feedback(request)
     finally:
         if conn is not None:
             conn.close()
@@ -424,7 +475,8 @@ async def submit_dry_run(request: Request, pid: str, draft_id: int = Form(...), 
 def trail_status_text(result):
     status = result.get("status")
     if status == "VERIFIED":
-        return f"Chain intact, {result.get('events', 0)} events"
+        count = result.get("events", 0)
+        return f"Chain intact, {count} {pluralize(count, 'event')}"
     if status == "BROKEN":
         return f"Chain altered at event {result.get('broken_at')}: {result.get('reason', 'verification failed')}"
     if status == "EMPTY":
@@ -620,12 +672,9 @@ def _eval_view(summary):
     consistency = [{"system": label, "value": eval_rate(summary.get("consistency", {}).get(key))
                     if isinstance(summary.get("consistency", {}).get(key), (int, float)) and 0 <= summary.get("consistency", {}).get(key) <= 1
                     else summary.get("consistency", {}).get(key, "—")} for key, label in EVAL_SYSTEMS]
-    costs = [{"system": label, "formatted": f"${value:.4f}" if isinstance(value, (int, float)) else "—"}
-             for key, label in (("baseline", "Baseline"), ("agent", "Agent"), ("judge", "Judge"))
-             for value in [summary.get("cost_per_run_usd", {}).get(key)]]
     return {"run": summary.get("run", {}), "started_display": eval_started(summary.get("run", {}).get("started")),
             "chart": chart, "metrics": rows, "categories": categories, "consistency": consistency,
-            "costs": costs, "failures": summary.get("failures", []), "limits": summary.get("limits", []),
+            "failures": summary.get("failures", []), "limits": summary.get("limits", []),
             "chart_table": [{"system": item["label"], "mean": item["mean"], "interval": item["interval"]} for item in chart]}
 
 

@@ -1,7 +1,7 @@
 import json
 import pytest
 from fastapi.testclient import TestClient
-from app.main import common, display_ts, due_label, draft_state, paypal_status_label, reason_label
+from app.main import common, display_ts, due_label, draft_state, paypal_status_label, pluralize, reason_label, source_bundle_partial, trail_status_text
 
 
 def make(tmp_path, monkeypatch):
@@ -42,6 +42,129 @@ def test_queue_lists_a_dispute_in_plain_words(tmp_path, monkeypatch):
     assert "Item not received" in response.text
     assert client.get("/disputes/" + dispute["dispute_id"]).status_code == 200
     assert client.get("/disputes/NOPE").status_code == 404
+
+
+def test_no_draft_workspace_offers_one_post_draft_action(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn)
+    conn.close()
+    page = client.get("/disputes/" + dispute["dispute_id"])
+    assert page.status_code == 200
+    assert 'action="/disputes/PP-TEST-1/draft"' in page.text
+    assert page.text.count('class="draft-submit-form" data-draft-form') == 1
+    assert "Draft evidence" in page.text
+    assert "Asks the model to draft evidence from the records. Nothing is sent to PayPal." in page.text
+    assert "Not checked until a draft exists." in page.text
+    assert "No required evidence is missing." not in page.text
+    assert '<ul class="check-list check-list--ok">' not in page.text
+    assert "form.dataset.submitting==='true'" in page.text
+    assert "button.disabled=true" in page.text
+    assert "double" not in page.text.lower()
+
+
+def test_draft_router_uses_fake_draft_once_and_redirects(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    seed_dispute(conn)
+    conn.close()
+    calls = []
+    def fake_draft(pid):
+        calls.append(pid)
+        return {"ok": True}
+    monkeypatch.setattr("app.draft_api._draft", fake_draft)
+    response = client.post("/disputes/PP-TEST-1/draft", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/disputes/PP-TEST-1?draft=ok"
+    assert calls == ["PP-TEST-1"]
+    page = client.get(response.headers["location"])
+    assert 'role="status"' in page.text
+    assert "Draft ready. Review each claim before approving." in page.text
+
+
+def test_draft_router_error_and_queue_messages_are_announced(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core import drafting
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn)
+    conn.close()
+    def not_ready(_pid):
+        raise drafting.NotDraftable()
+    monkeypatch.setattr("app.draft_api._draft", not_ready)
+    response = client.post(f"/disputes/{dispute['dispute_id']}/draft", follow_redirects=False)
+    assert response.headers["location"].endswith("?draft=notready")
+    page = client.get(f"/disputes/{dispute['dispute_id']}?draft=notready")
+    assert 'class="message message--error" role="alert"' in page.text
+    assert "This dispute is not waiting for your response." in page.text
+    assert "Drafting is paused: the model usage limit has been reached." in client.get(f"/disputes/{dispute['dispute_id']}?draft=budget").text
+    queue = client.get("/disputes?draft=invalid")
+    assert 'class="message message--error" role="alert"' in queue.text
+    assert "That dispute ID is not valid." in queue.text
+
+
+def test_failed_and_unexpected_draft_results_are_announced_as_errors(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    seed_dispute(conn)
+    conn.close()
+    monkeypatch.setattr("app.draft_api._draft", lambda _pid: {"ok": False})
+    failed = client.post("/disputes/PP-TEST-1/draft", follow_redirects=False)
+    page = client.get(failed.headers["location"])
+    assert "The model did not return a usable draft. Nothing was saved. Try again." in page.text
+    assert 'class="message message--error" role="alert"' in page.text
+
+    def raises(_pid):
+        raise RuntimeError("private implementation detail")
+    monkeypatch.setattr("app.draft_api._draft", raises)
+    unexpected = client.post("/disputes/PP-TEST-1/draft", follow_redirects=False)
+    page = client.get(unexpected.headers["location"])
+    assert "Something went wrong while drafting. Nothing was saved." in page.text
+    assert "private implementation detail" not in page.text
+    assert 'class="message message--error" role="alert"' in page.text
+
+    not_found = client.get("/disputes?draft=notfound")
+    assert "The dispute was not found." in not_found.text
+    assert 'class="message message--error" role="alert"' in not_found.text
+
+
+def test_saved_draft_has_confirmed_draft_again_action(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn)
+    conn.execute("INSERT INTO draft_evidence(case_id,paypal_dispute_id,decision,payload_json,verification_json,status,created_at) "
+                 "VALUES(1,?,?,?,?,?,?)", (dispute["dispute_id"], "CONTEST", "[]", "{}", "VERIFIED", "2026-11-08"))
+    conn.commit()
+    conn.close()
+    page = client.get("/disputes/" + dispute["dispute_id"])
+    assert "Draft again" in page.text
+    assert 'id="redraftDialog"' in page.text
+    assert "This creates an additional draft for review. Nothing is sent to PayPal." in page.text
+    assert 'method="post" action="/disputes/PP-TEST-1/draft"' in page.text
+    assert "redraft.showModal()" in page.text
+    assert "data-close-redraft" in page.text
+
+
+def test_abstain_is_a_legitimate_no_contest_outcome_and_keeps_paypal_request_note(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.main.FIXTURES_ENABLED", True)
+    page = make(tmp_path, monkeypatch).get("/disputes/PP-DEV-1002?fixture=abstain")
+    assert page.status_code == 200
+    assert "No contest recommended" in page.text
+    assert "Missing evidence: Proof of fulfillment." in page.text
+    assert "PayPal also asked for: Proof of refund, Other. Not provided." in page.text
+    assert "We recommend accepting this claim" not in page.text
+    assert 'class="message message--error"' not in page.text
+
+
+def test_ui_does_not_render_spend_figures(tmp_path, monkeypatch):
+    page = make(tmp_path, monkeypatch).get("/eval")
+    assert "Cost per run" not in page.text
+    assert "USD per run" not in page.text
+    assert "Model spend" not in page.text
 
 
 @pytest.mark.parametrize("status", ["SUBMITTED", "SUBMITTED_DRY_RUN"])
@@ -89,6 +212,7 @@ def test_workspace_reads_verification_and_exact_source_record(tmp_path, monkeypa
     response = client.get("/disputes/" + dispute["dispute_id"])
     assert response.status_code == 200
     assert "The carrier marked delivery." in response.text
+    assert "Source record · 1" in response.text
     assert "shp:123" in response.text
     assert "delivery_status" in response.text
     assert "DELIVERED" in response.text
@@ -105,6 +229,8 @@ def test_workspace_reads_verification_and_exact_source_record(tmp_path, monkeypa
     assert "submitButton.disabled=!ack.checked" in response.text
     assert "data-close-confirm" in response.text
     assert "Review and submit (dry run)" in response.text
+    assert '<strong>1</strong> verified claim used' in response.text
+    assert '<strong>0</strong> claims excluded' in response.text
     assert f'name="draft_id" value="{draft_id}"' in response.text
 
 
@@ -162,6 +288,74 @@ def test_labels():
     assert draft_state({"status": "ABSTAIN"})[0] == "Recommend accepting"
     assert reason_label("MERCHANDISE_OR_SERVICE_NOT_RECEIVED") == "Item not received"
     assert reason_label("SOMETHING_NEW") == "Something new"
+
+
+def test_partial_state_only_marks_missing_source_records():
+    records = {"ord:2": {"kind": "order"}, "shp:2": {"kind": "shipment"}}
+    verification = {"claims": [{"claim": {"source_refs": [
+        {"record_id": "ord:2", "field": "amount", "quoted_value": "49.00 USD"},
+        {"record_id": "shp:2", "field": "carrier", "quoted_value": "UPS"},
+    ]}}]}
+    assert not source_bundle_partial(records, verification)
+    verification["claims"][0]["claim"]["source_refs"].append({"record_id": "shp:missing"})
+    assert source_bundle_partial(records, verification)
+
+
+def test_pluralization_and_single_event_chain_label():
+    assert pluralize(1, "dispute") == "dispute"
+    assert pluralize(0, "dispute") == "disputes"
+    assert pluralize(2, "source record") == "source records"
+    assert trail_status_text({"status": "VERIFIED", "events": 1}) == "Chain intact, 1 event"
+    assert trail_status_text({"status": "VERIFIED", "events": 3}) == "Chain intact, 3 events"
+
+
+def test_single_dispute_queue_uses_singular_count_copy(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn)
+    conn.close()
+    page = client.get("/disputes")
+    assert "1 dispute on file" in page.text
+    assert "1 needs a response" in page.text
+    assert "1 need a response" not in page.text
+    assert dispute["dispute_id"] in page.text
+
+
+def test_workspace_citations_resolve_against_saved_case_records_without_false_partial_state(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn)
+    dispute_pk = conn.execute("SELECT id FROM disputes WHERE paypal_dispute_id=?", (dispute["dispute_id"],)).fetchone()[0]
+    case_id = conn.execute("INSERT INTO cases(dispute_id,built_at,bundle_hash) VALUES(?,?,?)",
+                           (dispute_pk, "2026-11-08", "consistent-bundle")).lastrowid
+    source_rows = [
+        ("ord:2", "order", {"amount": "49.00 USD", "status": "COMPLETED"}),
+        ("shp:2", "shipment", {"carrier": "UPS", "tracking_number": "TRACK-2"}),
+    ]
+    for record_id, kind, content in source_rows:
+        conn.execute("INSERT INTO source_records(record_id,case_id,kind,content_json,untrusted) VALUES(?,?,?,?,0)",
+                     (record_id, case_id, kind, json.dumps(content)))
+    verification = {"decision": "CONTEST", "missing_evidence": [], "claims": [
+        {"claim": {"claim_id": "claim-1", "text": "The order is complete.", "source_refs": [
+            {"record_id": "ord:2", "field": "status", "quoted_value": "COMPLETED"}]},
+         "verdict": "VERIFIED", "reasons": []},
+        {"claim": {"claim_id": "claim-2", "text": "UPS carried the parcel.", "source_refs": [
+            {"record_id": "shp:2", "field": "carrier", "quoted_value": "UPS"}]},
+         "verdict": "VERIFIED", "reasons": []},
+    ]}
+    conn.execute("INSERT INTO draft_evidence(case_id,paypal_dispute_id,decision,payload_json,verification_json,status,created_at) "
+                 "VALUES(?,?,?,?,?,?,?)", (case_id, dispute["dispute_id"], "CONTEST", "[]",
+                                           json.dumps(verification), "VERIFIED", "2026-11-08"))
+    conn.commit()
+    conn.close()
+    page = client.get(f"/disputes/{dispute['dispute_id']}")
+    assert page.status_code == 200
+    assert "Source records · 2" in page.text
+    assert "COMPLETED" in page.text and "UPS" in page.text
+    assert "One or more source records are unavailable" not in page.text
+    assert 'class="message message--partial"' not in page.text
 
 
 

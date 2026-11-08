@@ -114,6 +114,7 @@ def case_data(variant="verified"):
     if variant == "abstain":
         verification = {"decision": "ABSTAIN", "recommendation": "Accept the claim because delivery is not confirmed.",
                         "missing_evidence": ["PROOF_OF_FULFILLMENT"], "l3_ran": True,
+                        "requested_not_provided": ["PROOF_OF_REFUND", "OTHER"],
                         "consistency_issues": [], "claims": [
                             _claim("claim-01", "The shipment is still in transit.", "VERIFIED",
                                    [("shp:dev-502", "delivery_status", "IN_TRANSIT")]),
@@ -127,6 +128,10 @@ def case_data(variant="verified"):
                         "consistency_issues": [], "claims": [verified_claim, review_claim, removed_claim]}
         payload = []
         draft_status = "ABSTAIN"
+    elif variant == "before":
+        verification = None
+        payload = []
+        draft_status = None
     else:
         verification = {"decision": "CONTEST", "recommendation": "Contest with verified claims.",
                         "missing_evidence": [], "l3_ran": True, "consistency_issues": [],
@@ -135,7 +140,7 @@ def case_data(variant="verified"):
                     "evidence_info": {"tracking_info": [{"carrier_name": "UPS", "tracking_number": "1ZDEV0000000000501"}]},
                     "notes": verified_claim["claim"]["text"]}]
         draft_status = "SUBMITTED_DRY_RUN" if variant == "submitted" else "VERIFIED"
-    dispute = {"paypal_dispute_id": "PP-DEV-1001" if variant != "abstain" else "PP-DEV-1002",
+    dispute = {"paypal_dispute_id": "PP-DEV-1003" if variant == "before" else "PP-DEV-1001" if variant != "abstain" else "PP-DEV-1002",
                "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "status": "WAITING_FOR_SELLER_RESPONSE",
                "stage": "INQUIRY", "amount_minor": 8450, "currency": "USD", "due_at": t["due"],
                "created_at": t["created"]}

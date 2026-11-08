@@ -24,11 +24,12 @@
 {%- endmacro %}
 {% block content %}
 <header class="page-head"><div class="title-group"><h1>Disputes</h1><p>Review the response deadline, then open a case to check its evidence.</p></div><div class="actions"><a class="btn btn--quiet btn--small" href="/disputes">Refresh</a></div></header>
+{% if draft_feedback %}<div class="message message--error" role="alert">{{ draft_feedback }}</div>{% endif %}
 {% if state == "error" %}<div class="message message--error" role="alert">{{ error_message }}</div>
 {% elif state == "loading" %}<p class="queue-copy" role="status">Loading disputes…</p><div class="table-loading" aria-hidden="true">{% for _ in range(5) %}<div class="loading-block"><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span></div>{% endfor %}</div>
 {% elif not action and not other %}<section class="empty-state" aria-labelledby="empty-title"><div class="empty-mark">{{ icon("receipt") }}<span>Disputes</span></div><h2 id="empty-title">No disputes yet</h2><p>A dispute created on a PayPal sandbox payment will appear here with its response deadline.</p></section>
 {% else %}
-<div class="queue-copy"><p>{{ action|length + other|length }} disputes on file{% if action %}. {{ action|length }} need a response, soonest deadline first.{% else %}. No disputes need a response.{% endif %}</p></div>
+{% set dispute_total = action|length + other|length %}<div class="queue-copy"><p>{{ dispute_total }} {{ pluralize(dispute_total, "dispute") }} on file{% if action %}. {{ action|length }} {{ "needs" if action|length == 1 else "need" }} a response, soonest deadline first.{% else %}. No disputes need a response.{% endif %}</p></div>
 <table class="dispute-table" aria-label="Disputes">
 <thead><tr><th scope="col">Respond by</th><th scope="col">Dispute</th><th scope="col" class="amount-head">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
 <tbody>
