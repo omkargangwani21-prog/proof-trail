@@ -116,3 +116,6 @@
 - Live dispute OFG: attempt 1 returned an empty reply after spending all 6,000 output tokens (finish_reason length); attempt 2 was valid JSON but left out the required `confidence` field on every claim, so validation rejected it. Both replies were cached, so clicking "Draft again" replayed the failure.
 - The drafter schema was NOT changed (it is what the frozen eval used, and nothing downstream reads `confidence`; making it optional would change what counts as a usable draft, a post-test change). The eval's "no usable draft" counts include this kind of failure.
 - Changed: the gateway no longer caches empty or length-truncated replies; the app's `draft_dispute` retries up to 3 times with a fresh cache key. The eval runner is unchanged.
+
+## 2026-11-09: saved drafts were dropping requested_not_provided
+- `save_draft` did not store the verifier's `requested_not_provided`, so the page showed "No required evidence is missing" even when PayPal also asked for Proof of refund and Other (seen on live disputes WVY and OFG). Fixed, with a test; unsubmitted drafts already saved were backfilled from each dispute's stored PayPal request using the verifier's gating rule. Submitted drafts were not edited.
