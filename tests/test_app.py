@@ -212,6 +212,7 @@ def test_workspace_reads_verification_and_exact_source_record(tmp_path, monkeypa
     response = client.get("/disputes/" + dispute["dispute_id"])
     assert response.status_code == 200
     assert "The carrier marked delivery." in response.text
+    assert "No required evidence is missing." in response.text
     assert "Source record · 1" in response.text
     assert "shp:123" in response.text
     assert "delivery_status" in response.text
@@ -229,6 +230,8 @@ def test_workspace_reads_verification_and_exact_source_record(tmp_path, monkeypa
     assert "submitButton.disabled=!ack.checked" in response.text
     assert "data-close-confirm" in response.text
     assert "Review and submit (dry run)" in response.text
+    assert "This payload contains fulfillment records only. It does not show the buyer authorized the purchase." in response.text
+    assert "This payload proves fulfillment." not in response.text
     assert '<strong>1</strong> verified claim used' in response.text
     assert '<strong>0</strong> claims excluded' in response.text
     assert f'name="draft_id" value="{draft_id}"' in response.text
@@ -490,6 +493,7 @@ def test_unauthorised_workspace_shows_requested_evidence_trail_limits_and_payloa
     assert "Unauthorized transaction" in response.text
     assert "Chargeback" in response.text
     assert "PayPal also asked for: Proof of refund, Other. Not provided." in response.text
+    assert "No required evidence is missing." not in response.text
     assert 'class="request-note"' in response.text
     assert 'class="message message--error"' not in response.text
     assert "Chain intact, 3 events" in response.text
@@ -498,7 +502,8 @@ def test_unauthorised_workspace_shows_requested_evidence_trail_limits_and_payloa
     assert "Intent recorded by agent" in response.text
     assert "Shopper text recorded by the agent; not independently verified." in response.text
     assert "synthetic_demo" in response.text
-    assert "This payload proves fulfillment. It does not by itself show the buyer authorized the purchase." in response.text
+    assert "This payload contains fulfillment records only. It does not show the buyer authorized the purchase." in response.text
+    assert "This payload proves fulfillment." not in response.text
     assert "Buyer approved" not in response.text
     assert "approval" not in response.text.lower()
 
