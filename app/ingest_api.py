@@ -1,5 +1,5 @@
 """Backend routes for getting disputes in. Wire into the app with app.include_router(router)."""
-import os, re
+import asyncio, contextlib, logging, os, re
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.concurrency import run_in_threadpool
@@ -73,3 +73,32 @@ async def paypal_webhook(request: Request):
         return JSONResponse({"error": "PAYPAL_WEBHOOK_ID is not set"}, status_code=503)
     code, body = await run_in_threadpool(_webhook, dict(request.headers), await request.body(), webhook_id)
     return JSONResponse(body, status_code=code)
+
+
+log = logging.getLogger("prooftrail.poll")
+POLL_SECONDS = int(os.environ.get("PT_POLL_SECONDS", "30"))
+
+
+def autopoll_enabled():
+    """Opt-in: set PT_AUTOPOLL=1. Only in live-sandbox mode, so tests and replay never call PayPal."""
+    return (os.environ.get("PT_AUTOPOLL") == "1" and POLL_SECONDS > 0
+            and os.environ.get("PT_MODE", "live-sandbox") == "live-sandbox")
+
+
+async def _poll_loop():
+    while True:
+        try:
+            await run_in_threadpool(_refresh)
+        except Exception as e:  # a failed poll must never stop the loop
+            log.warning("poll failed: %s", str(e)[:200])
+        await asyncio.sleep(POLL_SECONDS)
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app):
+    task = asyncio.create_task(_poll_loop()) if autopoll_enabled() else None
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()

@@ -57,6 +57,8 @@ class PayPalClient:
         return self._request("GET", "/v1/customer/disputes", params=params)
 
     def provide_evidence(self, dispute_id, evidences, dry_run=True):
+        if not dry_run and str(dispute_id).startswith("SYN-"):
+            raise RuntimeError("refusing to send a synthetic sample dispute to PayPal")
         """evidences: list of {evidence_type, evidence_info, notes}. Dry-run by default."""
         payload = {"evidences": evidences}
         if dry_run:
