@@ -43,6 +43,60 @@ def _claim(claim_id, text, verdict, refs, reasons=None, claim_type="fulfillment"
             "verdict": verdict, "reasons": reasons or []}
 
 
+def unauthorised_case_data():
+    """Development fixture mirroring the copied local unauthorized dispute shape."""
+    t = _times()
+    dispute_id = "PP-R-WVY-10197010"
+    shopper_text = "Shopper asked the agent: “Find the order connected to my request.”"
+    dispute = {"paypal_dispute_id": dispute_id, "reason": "UNAUTHORISED",
+               "status": "WAITING_FOR_SELLER_RESPONSE", "stage": "CHARGEBACK",
+               "amount_minor": 4900, "currency": "USD",
+               "due_at": "2026-11-18T04:59:59.000Z", "created_at": t["created"]}
+    base = _records("DELIVERED")
+    records = {
+        "dsp:11": {**deepcopy(base["dsp:dev-1001"]), "record_id": "dsp:11",
+                    "content": {**deepcopy(base["dsp:dev-1001"]["content"]),
+                                "paypal_dispute_id": dispute_id, "reason": "UNAUTHORISED",
+                                "stage": "CHARGEBACK", "amount": "49.00 USD",
+                                "due_at": dispute["due_at"]}},
+        "ord:2": {**deepcopy(base["ord:dev-501"]), "record_id": "ord:2",
+                   "content": {**deepcopy(base["ord:dev-501"]["content"]),
+                               "paypal_order_id": "ORDER-2", "capture_id": "CAPTURE-SYNTHETIC-2",
+                               "amount": "49.00 USD", "data_origin": "synthetic_demo"}},
+        "shp:2": {**deepcopy(base["shp:dev-502"]), "record_id": "shp:2",
+                   "content": {**deepcopy(base["shp:dev-502"]["content"]),
+                               "data_origin": "synthetic_demo"}},
+        "pol:1": {**deepcopy(base["pol:dev-4"]), "record_id": "pol:1"},
+    }
+    trail_data = [
+        ("trl:4", "intent", shopper_text, "2026-11-07T16:55:00+00:00"),
+        ("trl:5", "cart", "Agent recorded the cart contents.", "2026-11-07T16:56:00+00:00"),
+        ("trl:6", "payment", "Agent recorded a sandbox payment event.", "2026-11-07T16:57:00+00:00"),
+    ]
+    for rid, event, summary, at in trail_data:
+        records[rid] = {"record_id": rid, "kind": "trail_event", "untrusted": False,
+                        "content": {"order_ref": "ord:2", "event": event, "summary": summary,
+                                    "event_at": at, "chain_status": "VERIFIED", "data_origin": "synthetic_demo"}}
+    claims = [
+        _claim("claim-01", "The order record contains a captured-payment identifier.", "VERIFIED",
+               [("ord:2", "capture_id", "CAPTURE-SYNTHETIC-2")]),
+        _claim("claim-02", "The carrier record marks the shipment delivered.", "VERIFIED",
+               [("shp:2", "delivery_status", "DELIVERED")]),
+        _claim("claim-03", "The agent recorded shopper text as purchase intent.", "VERIFIED",
+               [("trl:4", "summary", shopper_text)]),
+        _claim("claim-04", "The agent's trail contains a payment event.", "VERIFIED",
+               [("trl:6", "event", "payment")]),
+    ]
+    verification = {"decision": "CONTEST", "recommendation": "The saved draft contains fulfillment records.",
+                    "missing_evidence": [], "requested_not_provided": ["PROOF_OF_REFUND", "OTHER"],
+                    "l3_ran": True, "consistency_issues": [], "claims": claims}
+    payload = [{"evidence_type": "PROOF_OF_FULFILLMENT",
+                "evidence_info": {"tracking_info": [{"carrier_name": "UPS", "tracking_number": "1ZDEV0000000000501"}]},
+                "notes": "The carrier record marks this shipment delivered."}]
+    return {"dispute": dispute, "records": records, "verification": verification,
+            "payload": payload, "draft_status": "VERIFIED", "draft_id": 9010, "partial": False}
+
+
 def case_data(variant="verified"):
     t = _times()
     records = _records("DELIVERED" if variant != "abstain" else "IN_TRANSIT")
@@ -109,3 +163,57 @@ def queue_data():
               "due_sort": "9999", "is_action": False}]
     return {"action": action, "other": other}
 
+
+
+
+def eval_summary_data():
+    """Clearly synthetic UI sample matching the eval summary contract."""
+    return {
+        "run": {"split": "test", "model": "sample/model", "cases": 40, "repeats": 5,
+                "commit": "sample-commit", "started": "2026-11-07T10:00:00+00:00"},
+        "metrics": {
+            "decision_accuracy": {
+                "baseline": {"mean": 0.88, "lo": 0.77, "hi": 0.95},
+                "cited": {"mean": 0.91, "lo": 0.81, "hi": 0.97},
+                "verified": {"mean": 0.94, "lo": 0.86, "hi": 0.99},
+                "paired_baseline_minus_verified": {"mean": -0.06, "lo": -0.13, "hi": 0.00}},
+            "unsupported_run_rate": {
+                "baseline": {"mean": 0.10, "lo": 0.04, "hi": 0.19},
+                "cited": {"mean": 0.06, "lo": 0.02, "hi": 0.13},
+                "verified": {"mean": 0.03, "lo": 0.01, "hi": 0.09},
+                "paired_baseline_minus_verified": {"mean": 0.07, "lo": 0.01, "hi": 0.15}},
+            "injection_leak_rate": {
+                "baseline": {"mean": 0.00, "lo": 0.00, "hi": 0.07},
+                "cited": {"mean": 0.00, "lo": 0.00, "hi": 0.05},
+                "verified": {"mean": 0.00, "lo": 0.00, "hi": 0.04},
+                "paired_baseline_minus_verified": {"mean": 0.00, "lo": -0.04, "hi": 0.04}},
+            "completeness": {
+                "baseline": {"mean": 0.72, "lo": 0.59, "hi": 0.83},
+                "cited": {"mean": 0.78, "lo": 0.65, "hi": 0.88},
+                "verified": {"mean": 0.81, "lo": 0.69, "hi": 0.90},
+                "paired_baseline_minus_verified": {"mean": -0.09, "lo": -0.18, "hi": 0.01}},
+        },
+        "categories": [
+            {"name": "Item not received", "n": 18,
+             "baseline": {"decision_ok": 16, "any_unsupported": 2},
+             "cited": {"decision_ok": 17, "any_unsupported": 1},
+             "verified": {"decision_ok": 18, "any_unsupported": 0}},
+            {"name": "Conflicting records", "n": 12,
+             "baseline": {"decision_ok": 9, "any_unsupported": 1},
+             "cited": {"decision_ok": 10, "any_unsupported": 1},
+             "verified": {"decision_ok": 11, "any_unsupported": 0}},
+            {"name": "Prompt injection", "n": 10,
+             "baseline": {"decision_ok": 10, "any_unsupported": 0},
+             "cited": {"decision_ok": 10, "any_unsupported": 0},
+             "verified": {"decision_ok": 10, "any_unsupported": 0}},
+        ],
+        "consistency": {"baseline": 3, "cited": 2, "verified": 1},
+        "cost_per_run_usd": {"baseline": 0.0014, "agent": 0.0035, "judge": 0.0004},
+        "failures": [
+            {"case_id": "sample-014", "rep": 2, "system": "baseline", "decision": "CONTEST", "verdicts": ["unsupported"]},
+            {"case_id": "sample-027", "rep": 1, "system": "cited", "decision": "ABSTAIN", "verdicts": []},
+        ],
+        "limits": ["Synthetic sample values are for UI development only.",
+                   "Case-level intervals do not establish performance on live disputes.",
+                   "The test set is small and scenario labels are hand-reviewed."],
+    }

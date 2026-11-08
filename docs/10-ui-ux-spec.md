@@ -10,9 +10,9 @@ Use the evidence docket system in [11-design-system.md](11-design-system.md). Th
 
 ## Information architecture
 
-Only **Disputes** appears in primary navigation because it is the only built product surface. The queue is `/disputes`; each case opens at `/disputes/{paypal_dispute_id}`. Trail viewer, Demo Agent, Eval results and Settings are future surfaces and are not nav items.
+Primary navigation contains **Disputes**, **Trail**, **Eval results** and **Settings**, the product surfaces that are implemented. The queue is `/disputes`; each case opens at `/disputes/{paypal_dispute_id}`. Trail is `/trail`, evaluation summaries are `/eval`, and read-only configuration is `/settings`. A Trail intent is shown as recorded by the agent; shopper text is unverified. An intact hash/HMAC chain says records are unaltered, not that their content is true. Demo Agent remains a future surface and is not a nav item.
 
-The shell shows an unobtrusive **Sandbox** marker with a tooltip that says nothing here touches live PayPal. The header spend meter is labeled **Model spend**; its tooltip explains it is language-model credits against the configured hard cap. No spend figure is invented.
+The shell shows an unobtrusive **Sandbox** marker with a tooltip that says nothing here touches live PayPal. Private model-credit balances and caps stay out of the interface; budget enforcement and spend reporting belong in the operator’s terminal.
 
 ## Disputes queue
 
@@ -28,7 +28,7 @@ Claims are a numbered list, grouped by verifier verdict:
 - **Needs review:** open-circle icon and word; claim text; attached receipts and Keep / Remove choice.
 - **Removed:** cross icon and word; struck-through claim, removal reason and receipt(s), when available.
 
-A missing-evidence list names only items from `verification_json`. A source panel displays the full record from `source_records`, its record ID and kind, and the precise quoted value highlighted. On wide screens it opens at the right; on narrow screens it opens as a bottom sheet. It closes by close button and Escape, returns keyboard focus, and never hides the whole case context.
+A missing-evidence list names only items from `verification_json`. A source panel displays the full record from `source_records`, its record ID and kind, and the precise quoted value highlighted. If verification includes `requested_not_provided`, show a neutral note: “PayPal also asked for: X, Y. Not provided.” Keep it distinct from the missing-evidence error state. Show a `synthetic_demo` shipment origin explicitly. For an unauthorized-payment payload, keep this disclosure beside the preview: “This payload proves fulfillment. It does not by itself show the buyer authorized the purchase.” On wide screens it opens at the right; on narrow screens it opens as a bottom sheet. It closes by close button and Escape, returns keyboard focus, and never hides the whole case context.
 
 An Abstain decision replaces the submission panel with **“We recommend accepting this claim”**, followed by missing evidence and what the verifier checked. Do not offer a contest-submit action from that state.
 
@@ -56,15 +56,29 @@ No lorem text, placeholder data or “Not built yet” pages. Dev-only fixtures 
 
 Target WCAG 2.2 AA: minimum 4.5:1 normal-text contrast, 3:1 non-text boundaries, visible focus, keyboard-only access to citations and decisions, status with both text and icon, labels for form controls, accessible dialog name and focus trap, reduced-motion support, and target size ≥ 24 px (40 px default for buttons). Screen-reader live region announces source-panel changes and review-state updates.
 
-Required screenshot widths: 1440, 1280, 768 and 390 px. Desktop two-column case layout begins at 1024 px; tablet stacks the timeline before the draft; mobile uses one column, a bottom source panel, and a pinned action area that leaves content scrollable. No horizontal overflow at any width. Support explicit light and dark theme states.
+Required screenshot widths: 1440, 1280, 768 and 390 px. Round 4 captures include the queue, unauthorized case, Trail and Eval screens at 1440 light and 390 dark. Desktop two-column case layout begins at 1024 px; tablet stacks the timeline before the draft; mobile uses one column, a bottom source panel, and a pinned action area that leaves content scrollable. No horizontal overflow at any width. Support explicit light and dark theme states.
 
 ## Acceptance checks
 
 1. A submitted or dry-run-submitted dispute never appears in Needs action.
-2. Model spend has the visible label and explanatory tooltip.
-3. Each citation opens the same record and exact field/value represented by the stored claim.
-4. Removed claims are visibly crossed out and include the stored removal reason.
-5. Missing evidence and Abstain recommendation come from stored verification JSON.
-6. Modal payload is byte-for-byte equivalent at the data level to the payload being submitted; approval is explicit.
-7. Empty, loading, error, partial and success states have useful, direct copy.
-8. Four target widths render with light and dark themes; keyboard/focus and reduced motion are checked.
+2. Each citation opens the same record and exact field/value represented by the stored claim.
+3. Removed claims are visibly crossed out and include the stored removal reason.
+4. Missing evidence and Abstain recommendation come from stored verification JSON.
+5. Modal payload is byte-for-byte equivalent at the data level to the payload being submitted; approval is explicit.
+6. Empty, loading, error, partial and success states have useful, direct copy.
+7. Four target widths render with light and dark themes; keyboard/focus and reduced motion are checked.
+
+
+## Trail viewer (`/trail`)
+
+List distinct order references with event count and chain status. A detail view shows intent → cart → payment in sequence, with human-readable UTC times, summaries, and only the first 12 characters of each event hash and previous hash. The status line reports verified, broken, unverified or empty chains. “Run tamper test” verifies an in-memory modified copy of event 2 and states that stored data is unchanged. Never display signatures, signing keys, or full hashes. Include “Tamper-evident, not tamper-proof.” Development screenshots may use the labeled demo trail fixture; the empty state explains that a completed demo-agent purchase will appear here.
+
+## Evaluation results (`/eval`)
+
+Read every `eval/results/test-*/summary.json`. Keep `test-DeepSeek-V4-Flash-0731` as the headline ablation. Show every other test model in a separate panel table, one row per model, with the same four metrics and 95% intervals; never aggregate these models into the ablation. Beside each model, show the raw `flagged_runs` total and hand-classification counts from `flag-classification.json`, with `classified_by` verbatim. When that file is absent, say “not classified yet.” Show only the main run’s verified-system failures and its limits. The headline SVG compares the unsupported-run rate for baseline, cited and verified systems with direct labels and 95% case-level cluster-bootstrap intervals; provide a screen-reader table fallback. Show all other requested metrics with intervals, category counts, consistency, cost per run, published failures, limitations and run reproducibility details. State “Synthetic data. 95% intervals are case-level cluster bootstrap.” Do not claim wins, proof, firstness or exclusivity. If there is no summary, show `python -m eval.summary` as the next step. Development screenshots use a clearly labeled fixture with the same schema.
+
+## Settings (`/settings`)
+
+Show the current mode as read-only. For the five required environment keys, show only “set” or “not set”; never render values or lengths. Always show the sandbox PayPal base URL, identify a base-URL mismatch without exposing the configured value, show `/webhooks/paypal` with its public-URL requirement, and show `python -m core.poll`. Never show spend, credit balance or budget information.
+
+Trail and Eval empty states, fixture examples and Settings values must remain usable in light and dark themes and at the four required viewport widths. Fixtures are development-only and must not appear in production.

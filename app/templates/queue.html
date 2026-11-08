@@ -10,11 +10,12 @@
 @media(max-width:900px){.dispute-table tbody tr.needs-action td:first-child{box-shadow:none}.queue-copy{padding:12px 0 16px}.dispute-table,.dispute-table tbody,.dispute-table tr,.dispute-table td{display:block}.dispute-table{table-layout:auto}.dispute-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.dispute-table tbody tr{border-top:1px solid var(--rule);padding:8px 14px 11px;margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 18px}.dispute-table tbody tr:first-child{border-top:0}.dispute-table td,.dispute-table td:first-child,.dispute-table td:last-child{border:0;padding:7px 0}.dispute-table td:before{content:attr(data-label);display:block;color:var(--muted);font-size:11px;font-weight:600;margin-bottom:3px}.dispute-table .why-cell{grid-column:1/-1;grid-row:1}.dispute-table .deadline-cell{grid-column:1;grid-row:2}.dispute-table .amount{grid-column:2;grid-row:2;text-align:right}.dispute-table .status-cell{grid-column:1;grid-row:3}.dispute-table .action-cell{grid-column:2;grid-row:3;align-self:end}.dispute-table .action-cell:before{display:none}.dispute-table .amount-head{text-align:left!important}.group-title{padding-left:2px}.queue-group + .queue-group{margin-top:27px}}
 @media(max-width:420px){.queue-copy{align-items:flex-start}.queue-copy p{max-width:26ch}.dispute-table tbody tr{padding-left:12px;padding-right:12px;gap:1px 8px}.dispute-table .status-cell .status{white-space:normal}.dispute-table .amount{font-size:14px}}
 @media(max-width:420px){.dispute-table .action-cell{white-space:normal;text-align:right}.dispute-table .action-cell .btn{max-width:100%;white-space:nowrap}}
+.group-row th{padding:24px 12px 10px;text-align:left;color:var(--ink);background:transparent;font-size:16px;font-weight:600;border-bottom:1px solid var(--rule-strong)}.group-row:first-child th{padding-top:10px}.group-row th span{margin-left:7px;color:var(--muted);font:400 12px/1.4 var(--mono)}@media(max-width:900px){.dispute-table tbody tr.group-row{display:block;padding:16px 0 0;background:transparent;border:0}.dispute-table tbody tr.group-row th{display:block;padding:0 2px 9px;border-bottom:1px solid var(--rule-strong)}}
 </style>
 {% endblock %}
 {% macro row(r) -%}
 <tr{% if r.is_action %} class="needs-action"{% endif %}>
- <td class="deadline-cell" data-label="Respond by"><div class="deadline"><strong>{{ r.due }}</strong>{% if r.due_tone == "removed" %}<span class="status status--removed">{{ icon("alert") }}<span>Deadline passed</span></span>{% endif %}</div></td>
+ <td class="deadline-cell" data-label="Respond by"><div class="deadline">{% if r.is_action %}<strong>{{ r.due }}</strong>{% else %}<span class="muted">—</span>{% endif %}{% if r.is_action and r.due_tone == "removed" %}<span class="status status--removed">{{ icon("alert") }}<span>Deadline passed</span></span>{% endif %}</div></td>
  <td class="why-cell" data-label="Dispute"><span class="dispute-title">{{ r.why }}</span><span class="dispute-id mono">{{ r.pid }}</span></td>
  <td class="amount" data-label="Amount">{{ r.amount }}</td>
  <td class="status-cell" data-label="Status">{{ status(r.state_tone|upper, r.state) }}</td>
@@ -23,14 +24,17 @@
 {%- endmacro %}
 {% block content %}
 <header class="page-head"><div class="title-group"><h1>Disputes</h1><p>Review the response deadline, then open a case to check its evidence.</p></div><div class="actions"><a class="btn btn--quiet btn--small" href="/disputes">Refresh</a></div></header>
-{% if dev_fixture %}<p class="dev-note">Development sample · values are synthetic and for screenshot review only.</p>{% endif %}
 {% if state == "error" %}<div class="message message--error" role="alert">{{ error_message }}</div>
 {% elif state == "loading" %}<p class="queue-copy" role="status">Loading disputes…</p><div class="table-loading" aria-hidden="true">{% for _ in range(5) %}<div class="loading-block"><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span><span class="loading-line"></span></div>{% endfor %}</div>
 {% elif not action and not other %}<section class="empty-state" aria-labelledby="empty-title"><div class="empty-mark">{{ icon("receipt") }}<span>Disputes</span></div><h2 id="empty-title">No disputes yet</h2><p>A dispute created on a PayPal sandbox payment will appear here with its response deadline.</p></section>
 {% else %}
 <div class="queue-copy"><p>{{ action|length + other|length }} disputes on file{% if action %}. {{ action|length }} need a response, soonest deadline first.{% else %}. No disputes need a response.{% endif %}</p></div>
-{% if action %}<section class="queue-group" aria-labelledby="needs-title"><div class="group-title"><h2 id="needs-title">Needs action</h2><span>{{ action|length }}</span></div><table class="dispute-table"><thead><tr><th scope="col">Respond by</th><th scope="col">Dispute</th><th scope="col" class="amount-head">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody>{% for r in action %}{{ row(r) }}{% endfor %}</tbody></table></section>{% endif %}
-{% if other %}<section class="queue-group" aria-labelledby="other-title"><div class="group-title"><h2 id="other-title">Answered or under review</h2><span>{{ other|length }}</span></div><table class="dispute-table"><thead><tr><th scope="col">Respond by</th><th scope="col">Dispute</th><th scope="col" class="amount-head">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead><tbody>{% for r in other %}{{ row(r) }}{% endfor %}</tbody></table></section>{% endif %}
+<table class="dispute-table" aria-label="Disputes">
+<thead><tr><th scope="col">Respond by</th><th scope="col">Dispute</th><th scope="col" class="amount-head">Amount</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+<tbody>
+{% if action %}<tr class="group-row"><th colspan="5" scope="rowgroup">Needs action <span>{{ action|length }}</span></th></tr>{% for r in action %}{{ row(r) }}{% endfor %}{% endif %}
+{% if other %}<tr class="group-row group-row--secondary"><th colspan="5" scope="rowgroup">Answered or under review <span>{{ other|length }}</span></th></tr>{% for r in other %}{{ row(r) }}{% endfor %}{% endif %}
+</tbody></table>
 {% endif %}
 {% endblock %}
 
