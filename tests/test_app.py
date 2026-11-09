@@ -159,6 +159,8 @@ def test_abstain_is_a_legitimate_no_contest_outcome_and_keeps_paypal_request_not
     assert "We recommend accepting this claim" not in page.text
     assert "Not enough evidence to contest" in page.text
     assert "Recommend accepting" not in page.text
+    assert "Reason not recorded for this draft." in page.text
+    assert "Model’s rationale (not verified)" not in page.text
     assert 'class="message message--error"' not in page.text
 
 
@@ -290,9 +292,73 @@ def test_due_labels():
 
 def test_labels():
     assert draft_state(None)[0] == "No draft"
-    assert draft_state({"status": "ABSTAIN"}) == ("Not enough evidence to contest", "review", "Review")
+    assert draft_state({"status": "ABSTAIN"}) == ("Not contesting", "review", "Review")
     assert reason_label("MERCHANDISE_OR_SERVICE_NOT_RECEIVED") == "Item not received"
     assert reason_label("SOMETHING_NEW") == "Something new"
+
+
+@pytest.mark.parametrize(("reason", "message", "missing", "issues"), [
+    ("consistency", "The records contradict each other, so ProofTrail did not contest.", [],
+     ["Order amount differs from captured amount."]),
+    ("missing_evidence", "Required evidence is missing: Proof of refund.", ["PROOF_OF_REFUND"], []),
+    ("model_abstained", "The model chose not to contest.", [], []),
+    ("model_recommended_accept", "The model recommended accepting the claim.", [], []),
+])
+def test_non_contest_workspace_explains_recorded_reason_and_rationale(
+        tmp_path, monkeypatch, reason, message, missing, issues):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn)
+    verification = {
+        "decision": "ABSTAIN", "decision_reasons": [reason], "drafter_decision": "ABSTAIN",
+        "rationale": "<img src=x onerror=alert(1)> " + ("Supporting rationale. " * 20),
+        "missing_evidence": missing, "consistency_issues": issues, "claims": [],
+    }
+    conn.execute(
+        "INSERT INTO draft_evidence(paypal_dispute_id,decision,payload_json,verification_json,status,created_at) "
+        "VALUES(?,?,?,?,?,?)",
+        (dispute["dispute_id"], "ABSTAIN", "[]", json.dumps(verification), "ABSTAIN", "2026-11-09"),
+    )
+    conn.commit()
+    conn.close()
+
+    page = client.get(f"/disputes/{dispute['dispute_id']}")
+    assert page.status_code == 200
+    assert "Why this decision" in page.text
+    assert message in page.text
+    assert "Reason not recorded for this draft." not in page.text
+    assert "Order amount differs from captured amount." in page.text if issues else True
+    assert "Model’s rationale (not verified):" in page.text
+    assert '<details class="decision-rationale">' in page.text
+    assert "&lt;img src=x onerror=alert(1)&gt;" in page.text
+    assert "<img src=x onerror=alert(1)>" not in page.text
+    assert "…" in page.text
+
+
+def test_abstain_queue_shows_neutral_reason_tags_or_no_tag_when_unknown(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    reasons = ["consistency", "missing_evidence", "model_abstained", "model_recommended_accept", None]
+    for index, reason in enumerate(reasons):
+        pid = f"PP-ABSTAIN-{index}"
+        dispute = seed_dispute(conn, pid)
+        verification = {"decision": "ABSTAIN", "decision_reasons": [reason] if reason else []}
+        conn.execute(
+            "INSERT INTO draft_evidence(paypal_dispute_id,decision,payload_json,verification_json,status,created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (dispute["dispute_id"], "ABSTAIN", "[]", json.dumps(verification), "ABSTAIN", "2026-11-09"),
+        )
+    conn.commit()
+    conn.close()
+
+    page = client.get("/disputes")
+    assert page.text.count("Not contesting") == len(reasons)
+    for tag in ("records conflict", "evidence missing", "model abstained", "model recommended accept"):
+        assert f'class="reason-tag">{tag}</span>' in page.text
+    assert page.text.count('class="reason-tag">') == 4
+    assert "Not enough evidence to contest" not in page.text
 
 
 def test_partial_state_only_marks_missing_source_records():

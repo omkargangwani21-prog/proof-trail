@@ -160,8 +160,42 @@ def draft_state(draft):
     if status == "VERIFIED":
         return "Draft ready", "verified", "Review"
     if status == "ABSTAIN":
-        return "Not enough evidence to contest", "review", "Review"
+        return "Not contesting", "review", "Review"
     return status.replace("_", " ").capitalize(), "neutral", "Review"
+
+
+DECISION_REASON_TAGS = {
+    "consistency": "records conflict",
+    "missing_evidence": "evidence missing",
+    "model_abstained": "model abstained",
+    "model_recommended_accept": "model recommended accept",
+}
+
+
+def decision_reason_tag(draft):
+    if not draft or draft["status"] != "ABSTAIN" or not draft["verification_json"]:
+        return None
+    try:
+        reasons = json.loads(draft["verification_json"]).get("decision_reasons", [])
+    except (TypeError, ValueError, AttributeError):
+        return None
+    return next((DECISION_REASON_TAGS[reason] for reason in reasons if reason in DECISION_REASON_TAGS), None)
+
+
+def decision_reason_lines(verification, missing_labels):
+    lines = []
+    for reason in (verification or {}).get("decision_reasons", []):
+        if reason == "consistency":
+            lines.append({"text": "The records contradict each other, so ProofTrail did not contest.",
+                          "issues": (verification or {}).get("consistency_issues", [])})
+        elif reason == "missing_evidence":
+            missing = ", ".join(missing_labels) if missing_labels else "not specified"
+            lines.append({"text": f"Required evidence is missing: {missing}.", "issues": []})
+        elif reason == "model_abstained":
+            lines.append({"text": "The model chose not to contest.", "issues": []})
+        elif reason == "model_recommended_accept":
+            lines.append({"text": "The model recommended accepting the claim.", "issues": []})
+    return lines
 
 
 def latest_draft(conn, pid):
@@ -201,6 +235,7 @@ def queue_row(d, draft, now=None):
         "due": due, "due_tone": due_tone, "state": state, "state_tone": state_tone,
         "cta": cta, "due_sort": d["due_at"] or "9999", "is_action": is_action,
         "origin": d["origin"] or "sandbox", "is_sample": d["origin"] == "synthetic_sample",
+        "is_abstain": status == "ABSTAIN", "reason_tag": decision_reason_tag(draft),
     }
 
 
@@ -384,6 +419,9 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
     requested_not_provided = [evidence_type_label(item) for item in (verification or {}).get("requested_not_provided", [])]
     consistency = (verification or {}).get("consistency_issues", [])
     reasons = (verification or {}).get("recommendation")
+    decision_reasons = decision_reason_lines(verification, missing_labels) if verification and verification.get("decision") != "CONTEST" else []
+    rationale = (verification or {}).get("rationale")
+    rationale_limit = 240
     is_sample = d.get("origin") == "synthetic_sample"
     conn_common = common(conn, "disputes", dev_fixture, force_dry_run=is_sample)
     return conn_common | {
@@ -394,6 +432,11 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
         "verification": verification, "claims": normalized_claims, "counts": counts,
         "missing": missing, "requested_not_provided": requested_not_provided,
         "missing_labels": missing_labels, "can_draft": can_draft, "can_redraft": can_redraft,
+        "decision_reasons": decision_reasons,
+        "decision_reason_not_recorded": bool(verification and verification.get("decision") != "CONTEST"
+                                               and not verification.get("decision_reasons")),
+        "rationale": rationale, "rationale_preview": rationale[:rationale_limit] if rationale else None,
+        "rationale_truncated": bool(rationale and len(rationale) > rationale_limit),
         "consistency": consistency, "recommendation": reasons,
         "trail_events": trail_events, "trail_chain_label": trail_chain_label,
         "stage_label": str(d.get("stage") or "Not provided").replace("_", " ").title(),
