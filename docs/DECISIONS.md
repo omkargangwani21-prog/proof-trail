@@ -119,3 +119,12 @@
 
 ## 2026-11-09: saved drafts were dropping requested_not_provided
 - `save_draft` did not store the verifier's `requested_not_provided`, so the page showed "No required evidence is missing" even when PayPal also asked for Proof of refund and Other (seen on live disputes WVY and OFG). Fixed, with a test; unsubmitted drafts already saved were backfilled from each dispute's stored PayPal request using the verifier's gating rule. Submitted drafts were not edited.
+
+
+## 2026-11-09: why does the verified system sometimes not contest when every claim is VERIFIED?
+- Two test-split V4.1-Flash runs ended NOT_CONTEST with all claims VERIFIED; the eval logs did not record the reason (drafts were uncached and the full verification result was not logged).
+- Replication on the DEV split (not frozen): 26 dev cases x 5 repeats, DeepSeek-V4.1-Flash, draft and verify only, through the same code as the eval (scripts/hunt_verifier_decisions.py, data in eval/results/dev-hunt-DeepSeek-V4.1-Flash/runs.json). 130 usable runs.
+- Runs that ended without a contest, by mechanism: {'required evidence missing': 26, 'consistency issue forced abstain': 15, 'drafter abstained with nothing missing': 6}.
+- Runs whose final decision was outside the case's acceptable decisions: 0 of 130 ({}), by mechanism {}.
+- Reading: when it happens with nothing missing and no consistency issue, the drafter itself chose ABSTAIN and the verifier respects it; it is not a verifier rule. The reason for the two test-split runs is still not recorded, so this is a replication on a different split, not an explanation of those runs. Rates on test may differ.
+- Product consequence: the UI label "Not enough evidence to contest" is wrong when the model hedged on complete evidence; the page should say why (missing evidence, consistency issue, or the model's own abstain with its rationale).
