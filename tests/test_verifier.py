@@ -92,4 +92,4 @@ def test_duplicate_claim_id_removed():
 def test_missing_required_evidence_abstains_with_recommendation():
     r, _ = one("The refund policy exists.", [ref("pol:1", "version", "v1")], type="policy")
     assert r["decision"] == "ABSTAIN" and r["missing_evidence"] == ["PROOF_OF_FULFILLMENT"]
-    assert r["recommendation"] == "Accept the claim"
+    assert r["recommendation"] == "Do not contest on this evidence"

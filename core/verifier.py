@@ -10,6 +10,8 @@ def _shipped(c):
 REQUIRED_MAP = {"PROOF_OF_FULFILLMENT": ("fulfillment", "shipment", _shipped)}
 # Only these gate a CONTEST. Other types PayPal lists are reported as requested_not_provided.
 GATING = ("PROOF_OF_FULFILLMENT",)
+# After the test split was frozen: a claim citing ANY buyer-written record goes to NEEDS_REVIEW. Off by default until measured.
+UNTRUSTED_CAP = False
 FACTUAL = {"fulfillment", "authorization", "policy", "history"}
 CARRIERS = ("ups", "fedex", "usps", "dhl")
 DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
@@ -45,7 +47,7 @@ def present(kind, value, haystack):
     return norm(value) in norm(haystack)
 
 
-def check_claim(claim, recs, trusted_text):
+def check_claim(claim, recs, trusted_text, cap=None):
     """Deterministic layers. Returns (verdict, reasons) where verdict in REMOVED / NEEDS_REVIEW / PASS."""
     if not claim.source_refs:
         return "REMOVED", ["L1: claim has no source"]
@@ -80,12 +82,15 @@ def check_claim(claim, recs, trusted_text):
         if rc["kind"] == "trail_event" and rc["content"].get("chain_status") != "VERIFIED":
             review.append("L4: cited trail chain is not verified")
             break
-    if claim.type in FACTUAL and all(recs[r.record_id]["untrusted"] for r in claim.source_refs):
+    untrusted = [recs[r.record_id]["untrusted"] for r in claim.source_refs]
+    if claim.type in FACTUAL and all(untrusted):
         review.append("L4: factual claim sourced only from buyer-written text")
+    elif (UNTRUSTED_CAP if cap is None else cap) and any(untrusted):
+        review.append("L4: claim cites buyer-written text; a person must confirm it before it is used as evidence")
     return ("NEEDS_REVIEW", review) if review else ("PASS", [])
 
 
-def verify(bundle, draft, judge=None):
+def verify(bundle, draft, judge=None, untrusted_cap=None):
     """judge(claim_text, cited_records) -> True | False | 'unclear'. None = not run (fail closed)."""
     recs = {r["record_id"]: r for r in bundle["records"]}
     trusted_text = " ".join(json.dumps(r["content"]) for r in bundle["records"] if not r["untrusted"])
@@ -95,7 +100,7 @@ def verify(bundle, draft, judge=None):
             out.append({"claim": c, "verdict": "REMOVED", "reasons": ["L1: duplicate claim_id"]})
             continue
         seen.add(c.claim_id)
-        v, why = check_claim(c, recs, trusted_text)
+        v, why = check_claim(c, recs, trusted_text, untrusted_cap)
         if v == "PASS":
             if judge is None:
                 v, why = "NEEDS_REVIEW", ["L3: judge not run (fail closed)"]
@@ -134,7 +139,7 @@ def verify(bundle, draft, judge=None):
     else:
         decision = "CONTEST"
     return {"decision": decision,
-            "recommendation": "Accept the claim" if decision in ("ABSTAIN", "ACCEPT") else "Contest with the verified claims",
+            "recommendation": {"ACCEPT": "Accept the claim", "ABSTAIN": "Do not contest on this evidence"}.get(decision, "Contest with the verified claims"),
             "claims": out, "missing_evidence": missing, "requested_not_provided": not_provided, "consistency_issues": issues,
             "l3_ran": judge is not None}
 
