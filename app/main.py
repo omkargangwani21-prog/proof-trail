@@ -249,6 +249,7 @@ DRAFT_FEEDBACK = {
     "notready": ("This dispute is not waiting for your response.", "error"),
     "budget": ("Drafting is paused: the model usage limit has been reached.", "error"),
     "error": ("Something went wrong while drafting. Nothing was saved.", "error"),
+    "busy": ("Drafting is already in progress for this dispute. Wait for it to finish.", "partial"),
 }
 QUEUE_DRAFT_FEEDBACK = {
     "invalid": "That dispute ID is not valid.",

@@ -61,7 +61,39 @@ def test_no_draft_workspace_offers_one_post_draft_action(tmp_path, monkeypatch):
     assert '<ul class="check-list check-list--ok">' not in page.text
     assert "form.dataset.submitting==='true'" in page.text
     assert "button.disabled=true" in page.text
+    assert "Drafting… this can take up to a minute" in page.text
     assert "double" not in page.text.lower()
+
+
+def test_draft_endpoint_ignores_duplicate_request_while_first_is_in_flight(tmp_path, monkeypatch):
+    import concurrent.futures
+    import threading
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    seed_dispute(conn)
+    conn.close()
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def slow_fake_draft(pid):
+        calls.append(pid)
+        started.set()
+        assert release.wait(3)
+        return {"ok": True}
+
+    monkeypatch.setattr("app.draft_api._draft", slow_fake_draft)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, "/disputes/PP-TEST-1/draft", follow_redirects=False)
+        assert started.wait(2)
+        second = client.post("/disputes/PP-TEST-1/draft", follow_redirects=False)
+        assert second.status_code == 303
+        assert second.headers["location"] == "/disputes/PP-TEST-1?draft=busy"
+        release.set()
+        assert first.result(timeout=3).headers["location"] == "/disputes/PP-TEST-1?draft=ok"
+    assert calls == ["PP-TEST-1"]
+    busy_page = client.get("/disputes/PP-TEST-1?draft=busy")
+    assert "Drafting is already in progress for this dispute. Wait for it to finish." in busy_page.text
 
 
 def test_draft_router_uses_fake_draft_once_and_redirects(tmp_path, monkeypatch):

@@ -2,6 +2,7 @@
 Redirect query values for the UI: ?draft=ok | failed | notready | budget | error on the dispute page,
 ?draft=invalid | notfound on the queue. Never put spend figures in any message."""
 import logging, os, re
+import asyncio
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 from starlette.concurrency import run_in_threadpool
@@ -12,6 +13,7 @@ from core.gateway import BudgetExceeded
 router = APIRouter()
 ID = re.compile(r"^[A-Za-z0-9-]{5,40}$")
 log = logging.getLogger("prooftrail.draft")
+_draft_locks: dict[str, asyncio.Lock] = {}
 
 
 def _conn():
@@ -31,15 +33,24 @@ async def create_draft(pid: str):
     if not ID.match(pid):
         return RedirectResponse("/disputes?draft=invalid", status_code=303)
     back = f"/disputes/{pid}"
+    lock = _draft_locks.setdefault(pid, asyncio.Lock())
+    if lock.locked():
+        return RedirectResponse(back + "?draft=busy", status_code=303)
+    await lock.acquire()
     try:
-        res = await run_in_threadpool(_draft, pid)
-    except drafting.DisputeNotFound:
-        return RedirectResponse("/disputes?draft=notfound", status_code=303)
-    except drafting.NotDraftable:
-        return RedirectResponse(back + "?draft=notready", status_code=303)
-    except BudgetExceeded:
-        return RedirectResponse(back + "?draft=budget", status_code=303)
-    except Exception:
-        log.exception("draft failed for %s", pid)
-        return RedirectResponse(back + "?draft=error", status_code=303)
-    return RedirectResponse(back + ("?draft=ok" if res["ok"] else "?draft=failed"), status_code=303)
+        try:
+            res = await run_in_threadpool(_draft, pid)
+        except drafting.DisputeNotFound:
+            return RedirectResponse("/disputes?draft=notfound", status_code=303)
+        except drafting.NotDraftable:
+            return RedirectResponse(back + "?draft=notready", status_code=303)
+        except BudgetExceeded:
+            return RedirectResponse(back + "?draft=budget", status_code=303)
+        except Exception:
+            log.exception("draft failed for %s", pid)
+            return RedirectResponse(back + "?draft=error", status_code=303)
+        return RedirectResponse(back + ("?draft=ok" if res["ok"] else "?draft=failed"), status_code=303)
+    finally:
+        lock.release()
+        if not lock.locked():
+            _draft_locks.pop(pid, None)

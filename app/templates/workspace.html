@@ -39,7 +39,7 @@ dialog{padding:0;color:var(--ink);background:var(--surface);border:1px solid var
 </header>
 {% if is_sample %}<p class="sample-notice" role="note">Generated for demonstration. Submissions are dry run only.</p>{% endif %}
 {% if success_message %}<div class="message message--success" role="status">{{ success_message }}</div>{% endif %}
-{% if draft_feedback %}<div class="message message--{{ draft_feedback_tone }}" role="{{ 'status' if draft_feedback_tone == 'success' else 'alert' }}">{{ draft_feedback }}</div>{% endif %}
+{% if draft_feedback %}<div class="message message--{{ draft_feedback_tone }}" role="{{ 'status' if draft_feedback_tone in ['success', 'partial'] else 'alert' }}">{{ draft_feedback }}</div>{% endif %}
 {% if error_message %}<div class="message message--error" role="alert">{{ error_message }}</div>{% endif %}
 {% if state == "partial" %}<div class="message message--partial" role="status">{{ partial_message }}</div>{% endif %}
 <div class="workspace">
@@ -80,7 +80,7 @@ dialog{padding:0;color:var(--ink);background:var(--surface);border:1px solid var
  const redraft=document.getElementById('redraftDialog'),openRedraft=document.getElementById('openRedraft');
  openRedraft?.addEventListener('click',()=>redraft.showModal());
  document.querySelectorAll('[data-close-redraft]').forEach(button=>button.addEventListener('click',()=>redraft?.close()));
- document.querySelectorAll('[data-draft-form]').forEach(form=>form.addEventListener('submit',event=>{if(form.dataset.submitting==='true'){event.preventDefault();return}form.dataset.submitting='true';form.setAttribute('aria-busy','true');const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;button.textContent='Drafting…'}}));
+ document.querySelectorAll('[data-draft-form]').forEach(form=>form.addEventListener('submit',event=>{if(form.dataset.submitting==='true'){event.preventDefault();return}form.dataset.submitting='true';form.setAttribute('aria-busy','true');const button=form.querySelector('button[type="submit"]');if(button){button.disabled=true;button.textContent='Drafting… this can take up to a minute'}}));
  const sourceBody=document.getElementById('sourceBody');
  const sourceMap=JSON.parse(document.getElementById('sourceData')?.textContent||'{}');
  const text=(tag,value,cls)=>{const node=document.createElement(tag);if(cls)node.className=cls;node.textContent=value;return node};
