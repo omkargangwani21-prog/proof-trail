@@ -593,6 +593,49 @@ def test_trail_empty_state_and_dev_fixture(tmp_path, monkeypatch):
     assert "prooftrail-ui-sample-key" not in sample.text
 
 
+def test_activity_lists_audit_and_submission_rows_newest_first(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn, "PP-ACTIVITY-1")
+    payload = [{"evidence_type": "PROOF_OF_FULFILLMENT", "notes": "Test"}]
+    draft_id = conn.execute(
+        "INSERT INTO draft_evidence(paypal_dispute_id,decision,payload_json,verification_json,status,created_at) "
+        "VALUES(?,?,?,?,?,?)",
+        (dispute["dispute_id"], "CONTEST", json.dumps(payload), "{}", "SUBMITTED_DRY_RUN", "2026-11-09"),
+    ).lastrowid
+    payload_hash = "abcdef0123456789"
+    for actor, action, at, detail in [
+        ("system", "draft_saved", "2026-11-09T02:00:00Z", {"decision": "CONTEST"}),
+        ("merchant", "approved", "2026-11-09T02:01:00Z", {"payload_hash": payload_hash}),
+        ("merchant", "submitted_dry_run", "2026-11-09T02:02:00Z", {"payload_hash": payload_hash}),
+    ]:
+        conn.execute("INSERT INTO audit_log(actor,action,entity,entity_id,detail_json,at) VALUES(?,?,?,?,?,?)",
+                     (actor, action, "draft", str(draft_id), json.dumps(detail), at))
+    conn.execute("INSERT INTO submissions(draft_id,mode,payload_hash,response_json,submitted_at) VALUES(?,?,?,?,?)",
+                 (draft_id, "dry_run", payload_hash, "{}", "2026-11-09T02:02:00Z"))
+    conn.commit()
+    conn.close()
+
+    page = client.get("/trail?view=activity")
+    assert page.status_code == 200
+    assert "The audit log is append-only." in page.text
+    assert 'aria-current="page">Activity</a>' in page.text
+    for action in ("draft_saved", "approved", "submitted_dry_run"):
+        assert action in page.text
+    assert page.text.index("submitted_dry_run") < page.text.index("approved") < page.text.index("draft_saved")
+    assert payload_hash[:8] in page.text
+    assert payload_hash not in page.text
+    assert f'href="/disputes/{dispute["dispute_id"]}"' in page.text
+
+
+def test_activity_empty_state_is_designed(tmp_path, monkeypatch):
+    page = make(tmp_path, monkeypatch).get("/trail?view=activity")
+    assert page.status_code == 200
+    assert "No activity recorded yet." in page.text
+    assert "The audit log is append-only." in page.text
+
+
 def test_trail_tamper_test_only_modifies_a_copy(tmp_path, monkeypatch):
     monkeypatch.setenv("TRAIL_HMAC_KEY", "trail-test-secret-do-not-display")
     client = make(tmp_path, monkeypatch)

@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from app import ingest_api
 from app.ingest_api import router as ingest_router
 from app.draft_api import router as draft_router
-from core.submitter import EXTRA_SCHEMA, NotApproved, NotSubmittable, approve, submit
+from core.submitter import EXTRA_SCHEMA, NotApproved, NotSubmittable, approve, submit, phash
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -633,8 +633,56 @@ def _trail_page_context(request, order_ref=None, use_fixture=False, tamper_resul
     return ctx
 
 
+def activity_rows(conn):
+    rows = []
+    audit_rows = conn.execute(
+        "SELECT a.actor,a.action,a.at,a.entity_id,a.detail_json,d.paypal_dispute_id,d.payload_json "
+        "FROM audit_log a LEFT JOIN draft_evidence d ON d.id=CAST(a.entity_id AS INTEGER) "
+        "WHERE a.entity='draft' AND a.action IN ('draft_saved','approved')"
+    ).fetchall()
+    for row in audit_rows:
+        detail = json.loads(row["detail_json"] or "{}")
+        payload_hash = detail.get("payload_hash")
+        if not payload_hash and row["payload_json"]:
+            try:
+                payload_hash = phash(json.loads(row["payload_json"]))
+            except (TypeError, ValueError):
+                payload_hash = None
+        rows.append({"time": display_ts(row["at"]), "sort_time": row["at"], "actor": row["actor"],
+                     "action": row["action"], "pid": row["paypal_dispute_id"],
+                     "payload_hash": payload_hash[:8] if payload_hash else "—"})
+    submission_rows = conn.execute(
+        "SELECT s.mode,s.payload_hash,s.submitted_at,d.paypal_dispute_id,"
+        "COALESCE(a.actor,'merchant') AS actor FROM submissions s "
+        "LEFT JOIN draft_evidence d ON d.id=s.draft_id "
+        "LEFT JOIN audit_log a ON a.entity='draft' AND a.entity_id=CAST(s.draft_id AS TEXT) "
+        "AND a.action='submitted_' || s.mode ORDER BY s.id DESC"
+    ).fetchall()
+    for row in submission_rows:
+        rows.append({"time": display_ts(row["submitted_at"]), "sort_time": row["submitted_at"],
+                     "actor": row["actor"], "action": "submitted_" + row["mode"],
+                     "pid": row["paypal_dispute_id"],
+                     "payload_hash": (row["payload_hash"] or "—")[:8]})
+    rows.sort(key=lambda row: parse_ts(row["sort_time"]) or datetime.datetime.min.replace(tzinfo=datetime.timezone.utc),
+              reverse=True)
+    return rows
+
+
 @app.get("/trail", response_class=HTMLResponse)
-async def trail_view(request: Request, order_ref: str | None = None, fixture: str | None = None):
+async def trail_view(request: Request, order_ref: str | None = None, fixture: str | None = None,
+                     view: str = "trail"):
+    if view == "activity":
+        conn = None
+        try:
+            conn = open_db()
+            ctx = common(conn, "trail") | {"state": "activity", "activity_rows": activity_rows(conn),
+                                             "trail_footnote": "The audit log is append-only."}
+        except Exception:
+            ctx = error_context(request, "trail", "Activity could not be loaded. Check the local database, then refresh.")
+        finally:
+            if conn is not None:
+                conn.close()
+        return templates.TemplateResponse(request, "trail.html", ctx)
     use_fixture = FIXTURES_ENABLED and fixture == "sample"
     return templates.TemplateResponse(request, "trail.html", _trail_page_context(request, order_ref, use_fixture))
 
