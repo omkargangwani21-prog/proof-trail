@@ -112,7 +112,7 @@ def case_data(variant="verified"):
     removed_claim = _claim("claim-03", "A signature was collected at the door.", "REMOVED", [],
         ["No source record supports a signature."])
     if variant == "abstain":
-        verification = {"decision": "ABSTAIN", "recommendation": "Accept the claim because delivery is not confirmed.",
+        verification = {"decision": "ABSTAIN", "recommendation": "Do not contest on this evidence",
                         "missing_evidence": ["PROOF_OF_FULFILLMENT"], "l3_ran": True,
                         "requested_not_provided": ["PROOF_OF_REFUND", "OTHER"],
                         "consistency_issues": [], "claims": [
@@ -123,7 +123,7 @@ def case_data(variant="verified"):
         payload = []
         draft_status = "ABSTAIN"
     elif variant == "partial":
-        verification = {"decision": "ABSTAIN", "recommendation": "Accept the claim because source records are missing.",
+        verification = {"decision": "ABSTAIN", "recommendation": "Do not contest on this evidence",
                         "missing_evidence": ["PROOF_OF_FULFILLMENT"], "l3_ran": True,
                         "consistency_issues": [], "claims": [verified_claim, review_claim, removed_claim]}
         payload = []

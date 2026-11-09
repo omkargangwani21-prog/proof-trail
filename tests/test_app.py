@@ -182,6 +182,9 @@ def test_saved_draft_has_confirmed_draft_again_action(tmp_path, monkeypatch):
 
 
 def test_abstain_is_a_legitimate_no_contest_outcome_and_keeps_paypal_request_note(tmp_path, monkeypatch):
+    from app.dev_fixtures import case_data
+    for variant in ("abstain", "partial"):
+        assert case_data(variant)["verification"]["recommendation"] == "Do not contest on this evidence"
     monkeypatch.setattr("app.main.FIXTURES_ENABLED", True)
     page = make(tmp_path, monkeypatch).get("/disputes/PP-DEV-1002?fixture=abstain")
     assert page.status_code == 200
