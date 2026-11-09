@@ -746,6 +746,14 @@ def eval_interval(stat):
     return f"{eval_rate(stat['mean'])} (95% CI {eval_rate(stat.get('lo'))}–{eval_rate(stat.get('hi'))})"
 
 
+def eval_consistency(value, repeats=None):
+    if isinstance(value, (int, float)) and 0 <= value <= 1:
+        return eval_rate(value)
+    if value is None or str(value).strip().lower() in {"", "—", "n/a", "na", "none"}:
+        return "n/a (single repeat per case)" if repeats == 1 else "Not reported"
+    return str(value)
+
+
 def eval_started(value):
     if not value:
         return "Date not provided"
@@ -786,9 +794,9 @@ def _eval_view(summary):
         categories.append({"name": category.get("name", "Unlabeled category"), "n": n or "—",
                            **{system: f"Decision correct {category_rate(category.get(system, {}).get('decision_ok'))} · Unsupported runs {category_rate(category.get(system, {}).get('any_unsupported'))}"
                               for system, _ in EVAL_SYSTEMS}})
-    consistency = [{"system": label, "value": eval_rate(summary.get("consistency", {}).get(key))
-                    if isinstance(summary.get("consistency", {}).get(key), (int, float)) and 0 <= summary.get("consistency", {}).get(key) <= 1
-                    else summary.get("consistency", {}).get(key, "—")} for key, label in EVAL_SYSTEMS]
+    repeats = summary.get("run", {}).get("repeats")
+    consistency = [{"system": label, "value": eval_consistency(summary.get("consistency", {}).get(key), repeats)}
+                   for key, label in EVAL_SYSTEMS]
     return {"run": summary.get("run", {}), "started_display": eval_started(summary.get("run", {}).get("started")),
             "chart": chart, "metrics": rows, "categories": categories, "consistency": consistency,
             "failures": summary.get("failures", []), "limits": summary.get("limits", []),
@@ -822,15 +830,19 @@ def _flag_view(summary, classification, folder_name):
     return {"folder": folder_name, "model": summary.get("run", {}).get("model", folder_name),
             "raw_count": raw_count, "classified": True,
             "classified_by": classification.get("classified_by", "Not recorded"),
+            "classification_note": "Classified by the author with an AI assistant, not independent.",
             "reading": classification.get("reading", ""), "counts": hand_counts,
             "classified_count": sum(item["count"] for item in hand_counts)}
 
 
 def _panel_model(summary, folder_name):
     metrics = summary.get("metrics", {})
+    repeats = summary.get("run", {}).get("repeats")
+    consistency = summary.get("consistency", {})
     return {"folder": folder_name, "model": summary.get("run", {}).get("model", folder_name),
             **{key: {system: eval_interval(metrics.get(key, {}).get(system)) for system, _ in EVAL_SYSTEMS}
-               for key, _ in EVAL_METRICS}}
+               for key, _ in EVAL_METRICS},
+            "consistency": {system: eval_consistency(consistency.get(system), repeats) for system, _ in EVAL_SYSTEMS}}
 
 
 def _read_eval_folder(folder):

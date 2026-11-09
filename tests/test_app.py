@@ -788,3 +788,51 @@ def test_eval_reads_dynamic_runs_and_keeps_model_panel_and_flag_labels_separate(
     assert "Synthetic sample values" in response.text
     assert "win rate" not in response.text.lower()
     assert "proves" not in response.text.lower()
+
+
+def test_eval_renders_seven_runs_and_single_repeat_consistency_notice(tmp_path, monkeypatch):
+    from app.dev_fixtures import eval_summary_data
+    root = tmp_path / "seven-runs"
+    model_names = [
+        "deepseek-ai/DeepSeek-V4-Flash-0731", "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "deepseek-ai/DeepSeek-V4.1-Flash", "zai-org/GLM-5.3-Flash",
+        "Qwen/Qwen3-235B-A22B-Instruct-2507", "Qwen/Qwen3-30B-A3B-Instruct-2507",
+        "openai/gpt-oss-120b",
+    ]
+    for index, model_name in enumerate(model_names):
+        folder = root / ("test-" + model_name.split("/")[-1])
+        folder.mkdir(parents=True)
+        summary = eval_summary_data()
+        summary["run"].update({"model": model_name, "repeats": 1 if "V4-Pro" in model_name else 5})
+        if "V4-Pro" in model_name:
+            summary["consistency"] = {"baseline": None, "cited": None, "verified": None}
+        (folder / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+        (folder / "flag-classification.json").write_text(json.dumps({
+            "classified_by": f"author {index}", "counts": {"REBUTTAL": 1}, "labels": {},
+        }), encoding="utf-8")
+
+    monkeypatch.setattr("app.main.EVAL_RESULTS_DIR", root)
+    page = make(tmp_path, monkeypatch).get("/eval")
+    assert page.status_code == 200
+    for model_name in model_names:
+        assert model_name in page.text
+    assert page.text.count("Classified by the author with an AI assistant, not independent.") == 7
+    assert page.text.count("Synthetic data. 95% intervals are case-level cluster bootstrap.") >= 8
+    assert "Consistency" in page.text
+    assert "Baseline: n/a (single repeat per case)" in page.text
+    assert "Baseline: Not reported" not in page.text
+
+
+def test_eval_page_renders_all_seven_checked_in_test_runs(tmp_path, monkeypatch):
+    page = make(tmp_path, monkeypatch).get("/eval")
+    assert page.status_code == 200
+    expected = (
+        "test-DeepSeek-V4-Flash-0731", "test-DeepSeek-V4-Pro-0813", "test-DeepSeek-V4.1-Flash",
+        "test-GLM-5.3-Flash", "test-Qwen3-235B-A22B-Instruct-2507",
+        "test-Qwen3-30B-A3B-Instruct-2507", "test-gpt-oss-120b",
+    )
+    for run in expected:
+        assert run in page.text
+    assert "Baseline: n/a (single repeat per case)" in page.text
+    assert page.text.count("Classified by the author with an AI assistant, not independent.") == 7
+    assert page.text.count("Synthetic data. 95% intervals are case-level cluster bootstrap.") >= 8
