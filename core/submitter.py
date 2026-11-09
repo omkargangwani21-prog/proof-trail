@@ -60,6 +60,22 @@ def build_payload(bundle, verification):
     return [{"evidence_type": "PROOF_OF_FULFILLMENT", "evidence_info": {"tracking_info": tracking}, "notes": notes}]
 
 
+def decision_reasons(v):
+    """Every rule that explains a non-CONTEST decision. Empty for a contest or when nothing was recorded."""
+    if v.get("decision") == "CONTEST":
+        return []
+    out = []
+    if v.get("consistency_issues"):
+        out.append("consistency")
+    if v.get("missing_evidence"):
+        out.append("missing_evidence")
+    if v.get("drafter_decision") == "ABSTAIN":
+        out.append("model_abstained")
+    if v.get("drafter_decision") == "ACCEPT":
+        out.append("model_recommended_accept")
+    return out
+
+
 def save_draft(conn, bundle, verification):
     conn.executescript(EXTRA_SCHEMA)
     payload = build_payload(bundle, verification)
@@ -67,6 +83,8 @@ def save_draft(conn, bundle, verification):
            "missing_evidence": verification["missing_evidence"], "l3_ran": verification["l3_ran"],
            "consistency_issues": verification.get("consistency_issues", []),
            "requested_not_provided": verification.get("requested_not_provided", []),
+           "drafter_decision": verification.get("drafter_decision"), "rationale": verification.get("rationale"),
+           "decision_reasons": decision_reasons(verification),
            "claims": [{"claim": x["claim"].model_dump(), "verdict": x["verdict"], "reasons": x["reasons"]}
                       for x in verification["claims"]]}
     case_id = int(bundle["case_id"].split("_")[1])

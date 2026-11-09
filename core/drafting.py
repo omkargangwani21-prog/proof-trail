@@ -42,5 +42,8 @@ def draft_dispute(conn, dispute_id, gw=None, model=MODEL, run=run_case):
             break
     else:
         return {"ok": False, "reason": "The model did not return a usable draft. Nothing was saved."}
-    v = r["verification"]
+    v = dict(r["verification"])
+    d = r["draft_result"].get("draft")
+    if d is not None:
+        v["drafter_decision"], v["rationale"] = d.decision, d.rationale
     return {"ok": True, "draft_id": save_draft(conn, r["bundle"], v), "decision": v["decision"]}
