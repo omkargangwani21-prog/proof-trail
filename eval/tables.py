@@ -58,7 +58,8 @@ def build(results_dir="eval/results"):
            "Synthetic data, written by the system's author. Single runs on a frozen test split. 95% case-level cluster bootstrap intervals in brackets. "
            "Read the limits at the bottom before the numbers.", "",
            "Paired difference is baseline minus verified, per case. On a higher-is-better row a negative value favors Verified; on a lower-is-better row a positive value does. "
-           "Each run records the commit it ran at. Code changed between runs (see docs/DECISIONS.md), including the verifier's evidence gating, which does not change behaviour on these synthetic cases. "
+           "Each run records the commit it ran at. Current runtime has post-test safety rules for buyer-written citations and unauthorized-payment authorization evidence; these frozen results do not measure those rules. "
+           "The test cases contain no UNAUTHORISED dispute reason, but the buyer-citation rule may change outcomes on cases that cite buyer messages. See docs/DECISIONS.md. "
            "Blocks in the panel are in alphabetical order, not ranked.", ""]
     limits = []
     if main:

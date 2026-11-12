@@ -14,6 +14,7 @@
 {% elif state == "error" %}<div class="message message--error" role="alert">{{ error_message }}</div>
 {% else %}
 <div class="eval-banner" role="note">{{ synthetic_banner }}</div>
+<p class="eval-small">The current verifier also has post-test safety rules for buyer-written citations and authorization evidence on unauthorized-payment disputes. These frozen results do not measure those rules; the buyer-citation rule may change outcomes on cases that cite buyer messages. See the decisions log.</p>
 {% if main_eval %}
 <section class="eval-section eval-section--chart" aria-labelledby="ablation-heading"><h2 id="ablation-heading">Main ablation · {{ main_run_name }}</h2><p class="panel-disclosure">{{ synthetic_banner }}</p>
 <div class="chart-wrap"><svg class="unsupported-chart" viewBox="0 0 1120 166" role="img" aria-labelledby="unsupported-title unsupported-desc"><title id="unsupported-title">Runs with an unsupported claim</title><desc id="unsupported-desc">Mean rate and 95 percent case-level interval for baseline, cited and verified systems. A data table follows.</desc>

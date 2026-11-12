@@ -929,6 +929,8 @@ def test_eval_page_renders_all_seven_checked_in_test_runs(tmp_path, monkeypatch)
     )
     for run in expected:
         assert run in page.text
+    assert "post-test safety rules for buyer-written citations and authorization evidence" in page.text
+    assert "These frozen results do not measure those rules" in page.text
     assert "Baseline: n/a (single repeat per case)" in page.text
     assert page.text.count("Classified by the author with an AI assistant, not independent.") == 7
     assert page.text.count("Synthetic data. 95% intervals are case-level cluster bootstrap.") >= 8
