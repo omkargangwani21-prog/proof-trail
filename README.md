@@ -1,5 +1,7 @@
 # ProofTrail
 
+[![Tests](https://github.com/omkargangwani21-prog/proof-trail/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/omkargangwani21-prog/proof-trail/actions/workflows/tests.yml)
+
 An open-source assistant for PayPal merchants who respond to disputes. A model drafts the evidence; code checks every claim against the merchant's own records; a person approves; only then does code submit through the PayPal Disputes API. Sandbox only.
 
 ## How it works
@@ -41,7 +43,7 @@ Full tables with 95% intervals: [`docs/results.md`](docs/results.md), generated 
 
 ## Setup
 
-Python 3.14. Nothing here touches live PayPal.
+Python 3.12 or newer. GitHub Actions runs the suite on Python 3.12; local development has been tested on Python 3.14. Nothing here touches live PayPal.
 
 ```bash
 git clone <this repository> && cd proof-trail
