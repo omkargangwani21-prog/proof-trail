@@ -148,6 +148,7 @@ def test_failed_and_unexpected_draft_results_are_announced_as_errors(tmp_path, m
     page = client.get(failed.headers["location"])
     assert "The model did not return a usable draft. Nothing was saved. Try again." in page.text
     assert 'class="message message--error" role="alert"' in page.text
+    assert 'class="back-link" href="/disputes"' in page.text
 
     def raises(_pid):
         raise RuntimeError("private implementation detail")
@@ -157,10 +158,33 @@ def test_failed_and_unexpected_draft_results_are_announced_as_errors(tmp_path, m
     assert "Something went wrong while drafting. Nothing was saved." in page.text
     assert "private implementation detail" not in page.text
     assert 'class="message message--error" role="alert"' in page.text
+    assert 'class="back-link" href="/disputes"' in page.text
 
     not_found = client.get("/disputes?draft=notfound")
     assert "The dispute was not found." in not_found.text
     assert 'class="message message--error" role="alert"' in not_found.text
+
+
+def test_unknown_dispute_and_poller_or_database_errors_have_recovery_links(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    missing = client.get("/disputes/UNKNOWN-CASE")
+    assert missing.status_code == 404
+    assert "Case not found" in missing.text
+    assert 'class="back-link" href="/disputes"' in missing.text
+    assert "Traceback" not in missing.text
+
+    poll_error = client.get("/disputes?refresh=error")
+    assert "The dispute refresh failed. Check the PayPal connection, then try again." in poll_error.text
+    assert 'action="/ingest/refresh"' in poll_error.text
+    assert "Try refresh again" in poll_error.text
+
+    monkeypatch.setattr("app.main.open_db", lambda: (_ for _ in ()).throw(RuntimeError("db-private-detail")))
+    database_error = client.get("/disputes")
+    assert database_error.status_code == 200
+    assert "Disputes could not be loaded. Check the local database, then refresh." in database_error.text
+    assert "Try loading disputes again" in database_error.text
+    assert "db-private-detail" not in database_error.text
+    assert "Traceback" not in database_error.text
 
 
 def test_saved_draft_has_confirmed_draft_again_action(tmp_path, monkeypatch):
@@ -303,6 +327,35 @@ def test_dry_run_requires_acknowledgement_and_uses_existing_submitter(tmp_path, 
     assert conn.execute("SELECT status FROM draft_evidence WHERE id=?", (draft_id,)).fetchone()[0] == "SUBMITTED_DRY_RUN"
     assert conn.execute("SELECT mode FROM submissions WHERE draft_id=?", (draft_id,)).fetchone()[0] == "dry_run"
     conn.close()
+
+
+def test_review_dialog_downloads_exact_stored_payload_json(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn)
+    payload = [{"evidence_type": "PROOF_OF_FULFILLMENT", "evidence_info": {"tracking_info": []},
+                "notes": "Fulfillment record · café"}]
+    verification = {"decision": "CONTEST", "claims": [], "missing_evidence": []}
+    draft_id = conn.execute(
+        "INSERT INTO draft_evidence(paypal_dispute_id,decision,payload_json,verification_json,status,created_at) "
+        "VALUES(?,?,?,?,?,?)",
+        (dispute["dispute_id"], "CONTEST", json.dumps(payload, ensure_ascii=False),
+         json.dumps(verification), "VERIFIED", "2026-11-09"),
+    ).lastrowid
+    conn.commit()
+    conn.close()
+
+    page = client.get(f"/disputes/{dispute['dispute_id']}")
+    assert "Download payload JSON" in page.text
+    assert f"/disputes/{dispute['dispute_id']}/payload.json?draft_id={draft_id}" in page.text
+    downloaded = client.get(f"/disputes/{dispute['dispute_id']}/payload.json?draft_id={draft_id}")
+    expected = json.dumps(payload, indent=2, ensure_ascii=False)
+    assert downloaded.status_code == 200
+    assert downloaded.headers["content-type"].startswith("application/json")
+    assert downloaded.headers["content-disposition"] == f'attachment; filename="{dispute["dispute_id"]}-payload.json"'
+    assert downloaded.text == expected
+    assert client.get(f"/disputes/OTHER/payload.json?draft_id={draft_id}").status_code == 404
 
 
 def test_built_screens_are_routed_and_future_pages_stay_hidden(tmp_path, monkeypatch):

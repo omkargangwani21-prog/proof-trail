@@ -1,11 +1,12 @@
 import datetime
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from core.db import connect
 from core import trail
@@ -255,6 +256,11 @@ QUEUE_DRAFT_FEEDBACK = {
     "invalid": "That dispute ID is not valid.",
     "notfound": "The dispute was not found.",
 }
+QUEUE_REFRESH_FEEDBACK = {
+    "error": ("The dispute refresh failed. Check the PayPal connection, then try again.", "error"),
+    "partial": ("Some disputes could not be refreshed. Review the list and try again.", "partial"),
+    "done": ("Disputes refreshed.", "success"),
+}
 
 
 def draft_feedback(request, queue=False):
@@ -317,10 +323,14 @@ async def disputes(request: Request, fixture: str | None = None, filter: str = "
             "state": "success" if action or other else "empty", "action": action, "other": other,
             "queue_filter": filter if filter in {"all", "sandbox", "samples"} else "all",
         } | draft_feedback(request, queue=True)
+        refresh_feedback = QUEUE_REFRESH_FEEDBACK.get(request.query_params.get("refresh", ""))
+        if refresh_feedback:
+            ctx.update({"refresh_feedback": refresh_feedback[0], "refresh_feedback_tone": refresh_feedback[1]})
     except Exception:
         ctx = error_context(request, "disputes",
                             "Disputes could not be loaded. Check the local database, then refresh.", use_fixture) | {
-            "action": [], "other": [], "queue_filter": filter
+                            "action": [], "other": [], "queue_filter": filter,
+                            "refresh_feedback": QUEUE_REFRESH_FEEDBACK.get(request.query_params.get("refresh", ""), (None,))[0]
         }
     finally:
         if conn is not None:
@@ -505,6 +515,32 @@ async def dispute_workspace(request: Request, pid: str, fixture: str | None = No
         if conn is not None:
             conn.close()
     return templates.TemplateResponse(request, "workspace.html", ctx)
+
+
+@app.get("/disputes/{pid}/payload.json")
+async def download_payload(pid: str, draft_id: int):
+    conn = None
+    try:
+        conn = open_db()
+        row = conn.execute(
+            "SELECT payload_json FROM draft_evidence WHERE id=? AND paypal_dispute_id=?",
+            (draft_id, pid),
+        ).fetchone()
+        if not row or not row["payload_json"]:
+            return Response("Payload not found.", status_code=404, media_type="text/plain")
+        payload = json.loads(row["payload_json"])
+        if not payload:
+            return Response("Payload not found.", status_code=404, media_type="text/plain")
+        filename = re.sub(r"[^A-Za-z0-9_-]", "-", pid) + "-payload.json"
+        return Response(
+            json.dumps(payload, indent=2, ensure_ascii=False), media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except (OSError, json.JSONDecodeError, ValueError):
+        return Response("Payload could not be read.", status_code=404, media_type="text/plain")
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @app.post("/disputes/{pid}/submit")
