@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% from "_ui.html" import icon, status %}
-{% block title %}Settings{% endblock %}
+{% from "_ui.html" import icon %}
+{% block title %}System status{% endblock %}
 {% block head %}
 <style>
-.settings-lead{color:var(--muted);max-width:65ch;margin-top:8px}.settings-grid{max-width:900px;margin-top:30px;border-top:1px solid var(--rule-strong)}.setting-row{display:grid;grid-template-columns:minmax(190px,.8fr) minmax(0,1.4fr);gap:24px;padding:17px 12px;border-bottom:1px solid var(--rule);background:var(--surface)}.setting-row dt{font-weight:600}.setting-row dd{margin:0;min-width:0}.setting-row small{display:block;color:var(--muted);font-size:12px;margin-top:5px}.key-list{list-style:none;padding:0;margin:0}.key-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;padding:9px 0;border-bottom:1px solid var(--rule)}.key-list li:first-child{padding-top:0}.key-list li:last-child{padding-bottom:0;border-bottom:0}.key-name{font:400 12px var(--mono);overflow-wrap:anywhere}.key-state{font-size:12px;font-weight:600}.base-url{font:500 13px var(--mono);overflow-wrap:anywhere}.settings-note{margin-top:24px;padding:13px 15px;background:var(--surface);border-left:3px solid var(--info-ink);max-width:900px;color:var(--muted)}.settings-command{display:inline-block;padding:7px 9px;border:1px solid var(--rule);background:var(--paper);font:500 13px var(--mono)}
-@media(max-width:600px){.setting-row{grid-template-columns:1fr;gap:8px;padding:14px 12px}.key-list li{gap:10px}.base-url{font-size:12px}}
+.status-lead{color:var(--muted);max-width:65ch;margin-top:8px}.status-grid{max-width:900px;margin-top:30px;border-top:1px solid var(--rule-strong)}.status-row{display:grid;grid-template-columns:minmax(190px,.8fr) minmax(0,1.4fr);gap:24px;padding:17px 12px;border-bottom:1px solid var(--rule);background:var(--surface)}.status-row dt{font-weight:600}.status-row dd{margin:0;min-width:0}.status-row small{display:block;color:var(--muted);font-size:12px;margin-top:5px}.status-note{margin-top:24px;padding:13px 15px;background:var(--surface);border-left:3px solid var(--info-ink);max-width:900px;color:var(--muted)}
+@media(max-width:600px){.status-row{grid-template-columns:1fr;gap:8px;padding:14px 12px}}
 </style>
 {% endblock %}
 {% block content %}
-<header class="page-head"><div class="title-group"><h1>Settings</h1><p class="settings-lead">Read-only view of this app’s current mode and required connections.</p></div></header>
-<dl class="settings-grid">
-<div class="setting-row"><dt>Mode</dt><dd>{{ mode_value }}<small>This screen cannot change the mode.</small></dd></div>
-<div class="setting-row"><dt>Key status</dt><dd><ul class="key-list">{% for key in keys %}<li><span class="key-name">{{ key.name }}</span><span class="key-state">{{ key.status }}</span></li>{% endfor %}</ul><small>Only whether each key is set is shown. Secret values and lengths are never displayed.</small></dd></div>
-<div class="setting-row"><dt>PayPal base URL</dt><dd><span class="base-url">{{ paypal_base }}</span><small>{{ base_message }}</small></dd></div>
-<div class="setting-row"><dt>Webhook endpoint</dt><dd><span class="base-url">{{ webhook_path }}</span><small>This route needs a public URL before PayPal can deliver webhooks to it.</small></dd></div>
-<div class="setting-row"><dt>Dispute poller</dt><dd><code class="settings-command">{{ poll_command }}</code><small>Run this command when you want to refresh known disputes.</small></dd></div>
+<header class="page-head"><div class="title-group"><h1>System status</h1><p class="status-lead">A read-only view of the services this ProofTrail instance can use.</p></div></header>
+<dl class="status-grid">
+<div class="status-row"><dt>Mode</dt><dd>{{ mode_value }}<small>ProofTrail only connects to the PayPal sandbox.</small></dd></div>
+<div class="status-row"><dt>PayPal</dt><dd>{{ paypal_status }}<small>No live PayPal account is connected.</small></dd></div>
+<div class="status-row"><dt>Evidence drafting</dt><dd>{{ drafting_status }}<small>Drafts require merchant review before any submission.</small></dd></div>
+<div class="status-row"><dt>Purchase trail</dt><dd>{{ trail_status }}<small>Trail records show integrity, not whether shopper text is true.</small></dd></div>
+<div class="status-row"><dt>Webhook delivery</dt><dd>{{ webhook_status }}<small>A public URL is required before PayPal can deliver webhook events.</small></dd></div>
+<div class="status-row"><dt>Dispute updates</dt><dd>{{ poller_status }}<small>Refreshing disputes does not submit evidence.</small></dd></div>
 </dl>
-<p class="settings-note">PayPal connections shown here are sandbox-only.</p>
 {% endblock %}

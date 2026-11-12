@@ -10,6 +10,7 @@ PRICES = {
     "Qwen/Qwen3-235B-A22B-Instruct-2507": (0.20, 0.60),
     "zai-org/GLM-5.3-Flash": (0.15, 0.50),
     "deepseek-ai/DeepSeek-V4.1-Flash": (0.30, 1.20),
+    "deepseek-ai/DeepSeek-V4.1-Flash-1017": (0.30, 1.20),
     "nvidia/nemotron-3-super-120b-a12b": (0.30, 0.90),
 }
 MAX_TOKENS = 6000

@@ -1,7 +1,8 @@
 import pytest
 from types import SimpleNamespace as NS
 from core.db import connect
-from core.gateway import Gateway, BudgetExceeded, UnknownModel
+from core.gateway import Gateway, BudgetExceeded, UnknownModel, PRICES
+from core.drafting import MODEL as DEFAULT_DRAFT_MODEL
 
 M = "deepseek-ai/DeepSeek-V4-Flash-0731"
 
@@ -23,6 +24,11 @@ def gw(**kw):
 
 
 MSG = [{"role": "user", "content": "x"}]
+
+
+def test_live_draft_default_is_in_gateway_price_table():
+    assert DEFAULT_DRAFT_MODEL == "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+    assert DEFAULT_DRAFT_MODEL in PRICES
 
 
 def test_cost_is_computed_from_price_table():

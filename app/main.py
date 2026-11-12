@@ -22,6 +22,24 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app = FastAPI(title="ProofTrail", lifespan=ingest_api.lifespan)
 app.include_router(ingest_router)
 app.include_router(draft_router)
+
+
+@app.middleware("http")
+async def browser_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; "
+        "object-src 'none'; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "script-src 'self' 'unsafe-inline'; connect-src 'self'",
+    )
+    return response
+
 ACTION_STATUSES = {"WAITING_FOR_SELLER_RESPONSE", "OPEN"}
 SUBMITTED_STATUSES = {"SUBMITTED", "SUBMITTED_DRY_RUN"}
 PAGES = {}
@@ -968,14 +986,23 @@ async def settings(request: Request):
     load_dotenv()
     mode = os.environ.get("PT_MODE", "live-sandbox")
     mode_label = {"live-sandbox": "Live sandbox", "replay": "Replay"}.get(mode, "Unrecognized mode")
-    names = ("PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET", "NEBIUS_API_KEY", "TRAIL_HMAC_KEY", "PAYPAL_WEBHOOK_ID")
-    keys = [{"name": name, "status": "set" if os.environ.get(name) else "not set"} for name in names]
-    if not keys[3]["status"] == "set" and os.environ.get("PT_HMAC_KEY"):
-        keys[3]["status"] = "set"
     configured_base = os.environ.get("PAYPAL_BASE", SANDBOX_BASE)
     base_matches = configured_base == SANDBOX_BASE
-    ctx = common(None, "settings") | {"state": "success", "mode_value": mode_label, "keys": keys,
-        "paypal_base": SANDBOX_BASE, "base_matches": base_matches,
-        "base_message": "Sandbox URL confirmed." if base_matches else "Configured mode is not the required sandbox URL; the PayPal client will refuse it.",
-        "webhook_path": "/webhooks/paypal", "poll_command": "python -m core.poll"}
+    replay = mode == "replay"
+    paypal_status = ("Disabled during offline replay" if replay else
+                     "Sandbox connection ready" if base_matches and os.environ.get("PAYPAL_CLIENT_ID")
+                     and os.environ.get("PAYPAL_CLIENT_SECRET") else "Unavailable")
+    drafting_status = ("Disabled during offline replay" if replay else
+                       "Available" if os.environ.get("NEBIUS_API_KEY") else "Unavailable")
+    trail_status = "Available" if os.environ.get("TRAIL_HMAC_KEY") or os.environ.get("PT_HMAC_KEY") else "Unavailable"
+    webhook_status = "Not active during offline replay" if replay else (
+        "Configured" if os.environ.get("PAYPAL_WEBHOOK_ID") else "Not configured")
+    poller_status = "Disabled during offline replay" if replay else (
+        "Background polling enabled" if os.environ.get("PT_AUTOPOLL") == "1" else "Manual refresh")
+    ctx = common(None, "status") | {
+        "state": "success", "mode_value": mode_label,
+        "paypal_status": paypal_status, "drafting_status": drafting_status,
+        "trail_status": trail_status, "webhook_status": webhook_status,
+        "poller_status": poller_status,
+    }
     return templates.TemplateResponse(request, "settings.html", ctx)

@@ -14,6 +14,8 @@ An open-source assistant for PayPal merchants who respond to disputes. A model d
 
 Details: `docs/` (design, verifier, evaluation plan, decisions log).
 
+The frozen headline evaluation used the original `deepseek-ai/DeepSeek-V4-Flash-0731` model ID. That ID is no longer available to this Token Factory account. The live app now defaults to `deepseek-ai/DeepSeek-V4.1-Flash-1017`, which passed a live schema smoke check; the frozen results do not measure this updated runtime model.
+
 ## Results
 
 Full tables with 95% intervals: [`docs/results.md`](docs/results.md), generated from `eval/results/`. Test split: 52 synthetic cases x 5 repeats, frozen before any test run, each model run once.

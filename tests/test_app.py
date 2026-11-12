@@ -742,7 +742,7 @@ def test_eval_development_fixture_renders_summary_shape(tmp_path, monkeypatch):
     assert "win rate" not in response.text.lower()
 
 
-def test_settings_shows_only_key_presence_not_secret_values(tmp_path, monkeypatch):
+def test_system_status_hides_credential_names_values_and_service_urls(tmp_path, monkeypatch):
     secret_values = {
         "PAYPAL_CLIENT_ID": "paypal-client-id-SENTINEL-7351",
         "PAYPAL_CLIENT_SECRET": "paypal-client-secret-SENTINEL-9418",
@@ -756,15 +756,29 @@ def test_settings_shows_only_key_presence_not_secret_values(tmp_path, monkeypatc
     monkeypatch.setenv("PT_MODE", "replay")
     response = make(tmp_path, monkeypatch).get("/settings")
     assert response.status_code == 200
+    assert "System status" in response.text
     assert "Replay" in response.text
-    assert "https://api-m.sandbox.paypal.com" in response.text
-    assert "/webhooks/paypal" in response.text
+    assert "Disabled during offline replay" in response.text
+    assert "https://api-m.sandbox.paypal.com" not in response.text
+    assert "/webhooks/paypal" not in response.text
     assert "public URL" in response.text
-    assert "python -m core.poll" in response.text
     for name, value in secret_values.items():
-        assert name in response.text
-        assert "set" in response.text
+        assert name not in response.text
         assert value not in response.text
+
+
+def test_browser_security_headers_are_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("PT_MODE", "replay")
+    response = make(tmp_path, monkeypatch).get("/settings")
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"
+    csp = response.headers["content-security-policy"]
+    assert "default-src 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert "object-src 'none'" in csp
 
 
 

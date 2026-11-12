@@ -7,7 +7,7 @@ import json
 from core.pipeline import run_case
 from core.submitter import save_draft
 
-MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
+MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
 TRIES = 3
 
 

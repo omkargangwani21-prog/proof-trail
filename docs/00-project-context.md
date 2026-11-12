@@ -28,7 +28,8 @@ AI-drafted dispute evidence can contain fabricated details, and merchants have n
 | Language / framework | Python 3.12, FastAPI, Pydantic, SQLite | [ASSUMED] |
 | UI | Jinja + HTMX + Tailwind CDN, no Node build | [ASSUMED] |
 | LLM provider | Nebius Token Factory (OpenAI-compatible SDK) | [LOCKED] |
-| Main agent model | `deepseek-ai/DeepSeek-V4-Flash-0731` ($0.14/$0.28) | [LOCKED] |
+| Frozen headline evaluation model | `deepseek-ai/DeepSeek-V4-Flash-0731` ($0.14/$0.28) | [LOCKED; provider ID now unavailable] |
+| Live app draft model | `deepseek-ai/DeepSeek-V4.1-Flash-1017` ($0.30/$1.20) | [UPDATED 2026-11-12 after live account catalog check; one synthetic schema smoke passed, not covered by frozen headline results] |
 | Judge | `openai/gpt-oss-120b` ($0.15/$0.60), different family from main agent | [LOCKED] |
 | Premium reference | `deepseek-ai/DeepSeek-V4-Pro-0813` ($1.32/$3.96), ~40-run subset only | [LOCKED] |
 | Cheap dev | `Qwen/Qwen3-30B-A3B-Instruct-2507` ($0.10/$0.30) | [LOCKED] |
