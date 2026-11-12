@@ -973,6 +973,7 @@ def test_replay_mode_opens_synthetic_walkthrough_without_external_keys(tmp_path,
     home = client.get("/", follow_redirects=False)
     queue = client.get("/disputes")
     workspace = client.get(f"/disputes/{pid}")
+    unauthorized_workspace = client.get("/disputes/DEMO-UNAUTHORISED-001")
     trail_page = client.get("/trail")
     eval_page = client.get("/eval")
     settings = client.get("/settings")
@@ -980,7 +981,15 @@ def test_replay_mode_opens_synthetic_walkthrough_without_external_keys(tmp_path,
     assert home.headers["location"] == "/disputes"
     assert "Offline replay" in queue.text
     assert pid in queue.text and "Synthetic sample" in queue.text and "Draft ready" in queue.text
+    assert "DEMO-UNAUTHORISED-001" in queue.text
     assert "VERIFIED" in workspace.text and "Download payload JSON" in workspace.text
+    assert "Synthetic sample" in unauthorized_workspace.text
+    assert "Not enough evidence to contest" in unauthorized_workspace.text
+    assert "No trusted buyer-authorization record is available" in unauthorized_workspace.text
+    assert "Missing evidence: a trusted buyer-authorization record." in unauthorized_workspace.text
+    assert "PayPal also asked for: Proof of refund, Other. Not provided." in unauthorized_workspace.text
+    assert "No contest recommended." in unauthorized_workspace.text
+    assert 'id="openConfirm"' not in unauthorized_workspace.text
     assert "Draft again" not in workspace.text
     assert "Synthetic replay case. The draft and verdicts are precomputed" in workspace.text
     assert "DEMO-TRAIL-001" in trail_page.text
@@ -1018,9 +1027,10 @@ def test_replay_mode_opens_synthetic_walkthrough_without_external_keys(tmp_path,
     conn.close()
 
     assert seed_replay() == pid
+    assert "DEMO-UNAUTHORISED-001" in client.get("/disputes/DEMO-UNAUTHORISED-001").text
     conn = connect(str(tmp_path / "t.db"))
     assert conn.execute("SELECT COUNT(*) FROM draft_evidence WHERE paypal_dispute_id=?", (pid,)).fetchone()[0] == 1
-    assert conn.execute("SELECT COUNT(*) FROM disputes WHERE origin='synthetic_sample'").fetchone()[0] == 8
+    assert conn.execute("SELECT COUNT(*) FROM disputes WHERE origin='synthetic_sample'").fetchone()[0] == 9
     conn.close()
 
 
