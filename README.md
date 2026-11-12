@@ -31,7 +31,7 @@ Full tables with 95% intervals: [`docs/results.md`](docs/results.md), generated 
 - The scorer counts any mention of attacker text or a forbidden phrase, including a mention made only to reject it, and does not recognise correct dollar restatements of prices stored in minor units. Flagged runs were classified by hand by the system's author with an AI assistant, which is not independent. Raw and classified counts are published side by side.
 - GLM-5.3-Flash: 56 of 260 draft runs produced no usable output because generation hit the 6000-token cap. Those rows measure the model under that cap, not the verifier.
 - Qwen3-30B was the development model, so its test row is not independent of tuning.
-- Rules changed after the frozen test run are logged in `docs/DECISIONS.md` with reasons (for example, only fulfillment evidence now gates a contest). A claim that accurately quotes an untrusted buyer message can currently be marked VERIFIED; this is a known gap.
+- Rules changed after the frozen test run are logged in `docs/DECISIONS.md` with reasons (for example, only fulfillment evidence now gates a contest). A post-test rule now sends any claim citing buyer-written text to NEEDS_REVIEW. It was measured on small development samples only (78 DeepSeek runs and 61 usable GLM runs); there was no frozen-test rerun, so its impact on test-set results is unknown.
 - The agent trail is tamper-evident, not tamper-proof: deleting the newest events is undetectable without an externally stored head hash, and the key holder can forge. The shopper's instruction is recorded as given; the chain shows it was not edited afterwards, not that it is true.
 - Shipment and delivery records created by the demo agent are synthetic (`data_origin: synthetic_demo`).
 - For unauthorized-payment disputes the current payload shows fulfillment. It does not show that the buyer authorized the purchase, and the trail is not yet sent to PayPal.
@@ -61,6 +61,16 @@ python -m core.poll --once                   # pull disputes from the PayPal san
 python -m core.demo_agent start "buy a desk lamp under 60 dollars"   # then approve as the sandbox buyer
 python -m core.demo_agent finish
 ```
+
+### Offline replay demo
+
+To browse the synthetic queue, a reviewed draft, the trail, and the sample evaluation without configuring API keys:
+
+```bash
+bash scripts/replay-demo.sh
+```
+
+Replay mode uses UI fixtures and a temporary SQLite file outside the repository. The app blocks model drafting, PayPal fetch, poll refresh, webhook and live submission requests; the demo cannot send evidence to PayPal. The sample figures and cases are for demonstration only.
 
 Environment switches for the app: `PT_DB` (database path), `PT_SUBMIT_MODE` (`dry-run` is the default; `sandbox-submit` sends evidence to the PayPal sandbox).
 

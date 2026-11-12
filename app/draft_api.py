@@ -33,6 +33,9 @@ async def create_draft(pid: str):
     if not ID.match(pid):
         return RedirectResponse("/disputes?draft=invalid", status_code=303)
     back = f"/disputes/{pid}"
+    # Replay is an offline demonstration mode. Never invoke the model gateway there.
+    if os.environ.get("PT_MODE", "live-sandbox") == "replay":
+        return RedirectResponse(back + "?draft=replay", status_code=303)
     lock = _draft_locks.setdefault(pid, asyncio.Lock())
     if lock.locked():
         return RedirectResponse(back + "?draft=busy", status_code=303)

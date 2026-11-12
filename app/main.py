@@ -251,6 +251,7 @@ DRAFT_FEEDBACK = {
     "budget": ("Drafting is paused: the model usage limit has been reached.", "error"),
     "error": ("Something went wrong while drafting. Nothing was saved.", "error"),
     "busy": ("Drafting is already in progress for this dispute. Wait for it to finish.", "partial"),
+    "replay": ("Replay mode is offline. Drafting is disabled in this demonstration.", "partial"),
 }
 QUEUE_DRAFT_FEEDBACK = {
     "invalid": "That dispute ID is not valid.",
@@ -260,6 +261,7 @@ QUEUE_REFRESH_FEEDBACK = {
     "error": ("The dispute refresh failed. Check the PayPal connection, then try again.", "error"),
     "partial": ("Some disputes could not be refreshed. Review the list and try again.", "partial"),
     "done": ("Disputes refreshed.", "success"),
+    "replay": ("PayPal refresh is disabled in offline replay mode.", "partial"),
 }
 
 
@@ -274,14 +276,14 @@ def draft_feedback(request, queue=False):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    return RedirectResponse("/disputes")
+    return RedirectResponse("/disputes?fixture=queue" if os.environ.get("PT_MODE") == "replay" else "/disputes")
 
 
 @app.get("/disputes", response_class=HTMLResponse)
 async def disputes(request: Request, fixture: str | None = None, filter: str = "all"):
     if filter not in {"all", "sandbox", "samples"}:
         filter = "all"
-    use_fixture = FIXTURES_ENABLED and fixture == "queue"
+    use_fixture = FIXTURES_ENABLED and (fixture == "queue" or os.environ.get("PT_MODE") == "replay")
     if FIXTURES_ENABLED and fixture == "loading":
         ctx = common(None, "disputes", True) | {"state": "loading", "action": [], "other": [], "queue_filter": filter}
         return templates.TemplateResponse(request, "queue.html", ctx)
@@ -423,8 +425,9 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
         trail_chain_label = None
     submitted = draft_status in SUBMITTED_STATUSES
     has_draft = draft is not None or bool(fixture_data and fixture_data.get("draft_id")) or verification is not None
-    can_draft = d.get("status") == "WAITING_FOR_SELLER_RESPONSE" and not has_draft
-    can_redraft = d.get("status") == "WAITING_FOR_SELLER_RESPONSE" and has_draft and not submitted
+    replay_mode = os.environ.get("PT_MODE") == "replay"
+    can_draft = not replay_mode and d.get("status") == "WAITING_FOR_SELLER_RESPONSE" and not has_draft
+    can_redraft = not replay_mode and d.get("status") == "WAITING_FOR_SELLER_RESPONSE" and has_draft and not submitted
     missing = (verification or {}).get("missing_evidence", [])
     missing_labels = [evidence_type_label(item) for item in missing]
     requested_not_provided = [evidence_type_label(item) for item in (verification or {}).get("requested_not_provided", [])]
@@ -470,6 +473,8 @@ def _case_id(conn, pid):
 
 @app.get("/disputes/{pid}", response_class=HTMLResponse)
 async def dispute_workspace(request: Request, pid: str, fixture: str | None = None):
+    if FIXTURES_ENABLED and os.environ.get("PT_MODE") == "replay" and fixture is None:
+        fixture = {"PP-DEV-1001": "verified", "PP-DEV-1002": "abstain"}.get(pid)
     fixture_data = get_fixture(fixture) if FIXTURES_ENABLED and fixture in {"verified", "abstain", "partial", "submitted", "unauthorised", "before"} else None
     if fixture_data:
         ctx = workspace_context(request, None, fixture_data["dispute"], None, fixture_data)
@@ -719,13 +724,13 @@ async def trail_view(request: Request, order_ref: str | None = None, fixture: st
             if conn is not None:
                 conn.close()
         return templates.TemplateResponse(request, "trail.html", ctx)
-    use_fixture = FIXTURES_ENABLED and fixture == "sample"
+    use_fixture = FIXTURES_ENABLED and (fixture == "sample" or os.environ.get("PT_MODE") == "replay")
     return templates.TemplateResponse(request, "trail.html", _trail_page_context(request, order_ref, use_fixture))
 
 
 @app.post("/trail/{order_ref}/tamper", response_class=HTMLResponse)
 async def trail_tamper(request: Request, order_ref: str):
-    use_fixture = FIXTURES_ENABLED and request.query_params.get("fixture") == "sample"
+    use_fixture = FIXTURES_ENABLED and (request.query_params.get("fixture") == "sample" or os.environ.get("PT_MODE") == "replay")
     ctx = _trail_page_context(request, order_ref, use_fixture)
     if ctx["state"] != "detail" or len(ctx["events"]) < 2:
         ctx["tamper_result"] = "Tamper test unavailable: event 2 is not present."
@@ -892,7 +897,7 @@ def _read_eval_folder(folder):
 
 @app.get("/eval", response_class=HTMLResponse)
 async def eval_results(request: Request, fixture: str | None = None):
-    use_fixture = FIXTURES_ENABLED and fixture == "sample"
+    use_fixture = FIXTURES_ENABLED and (fixture == "sample" or os.environ.get("PT_MODE") == "replay")
     if use_fixture:
         from app.dev_fixtures import eval_summary_data
         summary = eval_summary_data()

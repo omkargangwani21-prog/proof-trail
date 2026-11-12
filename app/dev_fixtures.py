@@ -161,11 +161,12 @@ def queue_data():
     action = [{"pid": "PP-DEV-1001", "why": "Item not received", "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
                "status": "WAITING_FOR_SELLER_RESPONSE", "amount": "84.50 USD", "due": "Due in 2d",
                "due_tone": "review", "state": "Draft ready", "state_tone": "verified", "cta": "Review",
-               "due_sort": t["due"], "is_action": True}]
+               "due_sort": t["due"], "is_action": True, "fixture": "verified"}]
     other = [{"pid": "PP-DEV-1002", "why": "Item not as described", "reason": "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
               "status": "WAITING_FOR_SELLER_RESPONSE", "amount": "32.00 USD", "due": "Due in 5d",
-              "due_tone": "neutral", "state": "Dry run complete", "state_tone": "info", "cta": "View",
-              "due_sort": "9999", "is_action": False}]
+              "due_tone": "neutral", "state": "Not contesting", "state_tone": "review", "cta": "Review",
+              "due_sort": "9999", "is_action": False, "fixture": "abstain", "is_abstain": True,
+              "reason_tag": "evidence missing"}]
     return {"action": action, "other": other}
 
 

@@ -53,7 +53,7 @@ main{max-width:1440px;margin:0 auto;padding:42px 40px 120px}.page-head{display:f
  <a class="brand" href="/disputes">{{ mark() }}<span>ProofTrail</span></a>
  <nav class="nav" aria-label="Main navigation"><a href="/disputes" {% if active == "disputes" %}aria-current="page"{% endif %}>Disputes</a><a href="/trail" {% if active == "trail" %}aria-current="page"{% endif %}>Trail</a><a href="/eval" {% if active == "eval" %}aria-current="page"{% endif %}>Eval results</a><a href="/settings" {% if active == "settings" %}aria-current="page"{% endif %}>Settings</a></nav>
  <div class="top-meta">
-  <span class="environment" title="Sandbox only. Nothing here touches live PayPal.">{{ icon("shield") }}<span>Sandbox</span></span>
+  <span class="environment" title="{% if mode == 'replay' %}Offline replay. No model or PayPal requests are enabled.{% else %}Sandbox only. Nothing here touches live PayPal.{% endif %}">{{ icon("shield") }}<span>{{ "Offline replay" if mode == "replay" else "Sandbox" }}</span></span>
   {% if dev_fixture %}<span class="fixture-label" title="Synthetic screenshot data; development only">Development sample</span>{% endif %}
   <button type="button" class="theme-toggle" id="themeToggle" aria-label="Switch color theme" title="Switch color theme">◐</button>
  </div>

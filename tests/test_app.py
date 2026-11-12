@@ -892,3 +892,77 @@ def test_eval_page_renders_all_seven_checked_in_test_runs(tmp_path, monkeypatch)
     assert "Baseline: n/a (single repeat per case)" in page.text
     assert page.text.count("Classified by the author with an AI assistant, not independent.") == 7
     assert page.text.count("Synthetic data. 95% intervals are case-level cluster bootstrap.") >= 8
+
+
+def test_replay_mode_blocks_model_and_paypal_routes(tmp_path, monkeypatch):
+    monkeypatch.setenv("PT_MODE", "replay")
+    calls = []
+    monkeypatch.setattr("app.draft_api._draft", lambda pid: calls.append(("draft", pid)))
+    monkeypatch.setattr("app.ingest_api._fetch", lambda pid: calls.append(("fetch", pid)))
+    monkeypatch.setattr("app.ingest_api._refresh", lambda: calls.append(("refresh", None)))
+    monkeypatch.setattr("app.ingest_api._webhook", lambda *args: calls.append(("webhook", args)))
+    client = make(tmp_path, monkeypatch)
+
+    draft = client.post("/disputes/PP-TEST-1/draft", follow_redirects=False)
+    fetch = client.post("/ingest/fetch", data={"dispute_id": "PP-TEST-1"}, follow_redirects=False)
+    refresh = client.post("/ingest/refresh", follow_redirects=False)
+    webhook = client.post("/webhooks/paypal", content=b"{}")
+
+    assert draft.headers["location"] == "/disputes/PP-TEST-1?draft=replay"
+    assert fetch.headers["location"] == "/disputes?refresh=replay"
+    assert refresh.headers["location"] == "/disputes?refresh=replay"
+    assert webhook.status_code == 503
+    assert "disabled in replay mode" in webhook.json()["error"]
+    assert calls == []
+
+
+def test_replay_mode_opens_synthetic_walkthrough_without_external_keys(tmp_path, monkeypatch):
+    monkeypatch.setenv("PT_MODE", "replay")
+    monkeypatch.setattr("app.main.FIXTURES_ENABLED", True)
+    client = make(tmp_path, monkeypatch)
+
+    home = client.get("/", follow_redirects=False)
+    queue = client.get("/disputes")
+    workspace = client.get("/disputes/PP-DEV-1001?fixture=verified")
+    trail_page = client.get("/trail")
+    eval_page = client.get("/eval")
+    settings = client.get("/settings")
+
+    assert home.headers["location"] == "/disputes?fixture=queue"
+    assert "Offline replay" in queue.text
+    assert "/disputes/PP-DEV-1001?fixture=verified" in queue.text
+    assert "/disputes/PP-DEV-1002?fixture=abstain" in queue.text
+    assert "VERIFIED" in workspace.text and "Draft again" not in workspace.text
+    assert "DEMO-TRAIL-001" in trail_page.text
+    assert "Synthetic data. 95% intervals are case-level cluster bootstrap." in eval_page.text
+    assert "Replay" in settings.text
+    assert "Drafting is disabled" not in workspace.text
+
+    blocked = client.post("/disputes/PP-DEV-1001/draft", follow_redirects=False)
+    assert blocked.headers["location"] == "/disputes/PP-DEV-1001?draft=replay"
+    after = client.get(blocked.headers["location"])
+    assert "Replay mode is offline" in after.text
+
+
+def test_default_verifier_cap_sends_any_buyer_text_citation_to_review():
+    from core.schemas import Claim, SourceRef
+    from core.verifier import check_claim
+
+    records = {
+        "ord:test": {"record_id": "ord:test", "kind": "order", "untrusted": False,
+                     "content": {"status": "COMPLETED"}},
+        "msg:test": {"record_id": "msg:test", "kind": "buyer_message", "untrusted": True,
+                     "content": {"text": "I never received the parcel"}},
+    }
+    claim = Claim(
+        claim_id="c1", text="The buyer message says they never received the parcel.",
+        type="other", confidence=1.0,
+        source_refs=[SourceRef(record_id="ord:test", field="status", quoted_value="COMPLETED"),
+                     SourceRef(record_id="msg:test", field="text", quoted_value="I never received the parcel")],
+    )
+    default = check_claim(claim, records, "COMPLETED", cap=None)
+    frozen_eval_behavior = check_claim(claim, records, "COMPLETED", cap=False)
+
+    assert default[0] == "NEEDS_REVIEW"
+    assert any("buyer-written text" in reason for reason in default[1])
+    assert frozen_eval_behavior == ("PASS", [])

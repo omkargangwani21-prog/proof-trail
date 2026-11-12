@@ -47,6 +47,8 @@ def _webhook(headers, raw, webhook_id):
 
 @router.post("/ingest/fetch")
 async def fetch(dispute_id: str = Form(...)):
+    if os.environ.get("PT_MODE", "live-sandbox") == "replay":
+        return RedirectResponse("/disputes?refresh=replay", status_code=303)
     pid = dispute_id.strip()
     if not ID.match(pid):
         return RedirectResponse("/disputes?fetch=invalid", status_code=303)
@@ -59,6 +61,8 @@ async def fetch(dispute_id: str = Form(...)):
 
 @router.post("/ingest/refresh")
 async def refresh():
+    if os.environ.get("PT_MODE", "live-sandbox") == "replay":
+        return RedirectResponse("/disputes?refresh=replay", status_code=303)
     try:
         res = await run_in_threadpool(_refresh)
     except PayPalError:
@@ -68,6 +72,8 @@ async def refresh():
 
 @router.post("/webhooks/paypal")
 async def paypal_webhook(request: Request):
+    if os.environ.get("PT_MODE", "live-sandbox") == "replay":
+        return JSONResponse({"error": "webhooks are disabled in replay mode"}, status_code=503)
     webhook_id = os.environ.get("PAYPAL_WEBHOOK_ID", "")
     if not webhook_id:
         return JSONResponse({"error": "PAYPAL_WEBHOOK_ID is not set"}, status_code=503)
