@@ -6,7 +6,7 @@ An open-source assistant for PayPal merchants who respond to disputes. A model d
 
 1. **Disputes arrive.** A poller (`python -m core.poll`), a verified webhook receiver, or a fetch-by-ID form puts disputes into a local queue.
 2. **Draft on request.** One click asks the model to draft evidence from the order's records. Every claim must cite a record and a quoted value, or the draft abstains.
-3. **Verify.** Each claim gets a label: VERIFIED, NEEDS_REVIEW or REMOVED. Layers: structure (L1), grounding checked by code (L2), an independent judge model from a different family (L3), policy rules such as no blame language and no buyer-text-only claims (L4). The decision is CONTEST only when the evidence PayPal requested (fulfillment) is backed by a verified claim and the records are consistent; otherwise ABSTAIN.
+3. **Verify.** Each claim gets a label: VERIFIED, NEEDS_REVIEW or REMOVED. Layers: structure (L1), grounding checked by code (L2), an independent judge model from a different family (L3), policy rules such as no blame language and no buyer-text-only claims (L4). A CONTEST needs verified requested fulfillment evidence and consistent records. For an UNAUTHORISED dispute, it also needs a verified claim citing a trusted authorization record; otherwise the system abstains.
 4. **Approve and submit.** A person reviews the claims. The approval is bound to the SHA-256 of the exact payload. Submission is a dry run by default. The audit log is append-only (enforced by SQLite triggers). The code refuses any PayPal base URL that is not the sandbox.
 5. **Agent purchases.** A demo shopping agent records a hash-chained, HMAC-signed trail (intent, cart, payment) for each order it places. The trail is shown beside disputes about those orders.
 
@@ -34,7 +34,7 @@ Full tables with 95% intervals: [`docs/results.md`](docs/results.md), generated 
 - Rules changed after the frozen test run are logged in `docs/DECISIONS.md` with reasons (for example, only fulfillment evidence now gates a contest). A post-test rule now sends any claim citing buyer-written text to NEEDS_REVIEW. It was measured on small development samples only (78 DeepSeek runs and 61 usable GLM runs); there was no frozen-test rerun, so its impact on test-set results is unknown.
 - The agent trail is tamper-evident, not tamper-proof: deleting the newest events is undetectable without an externally stored head hash, and the key holder can forge. The shopper's instruction is recorded as given; the chain shows it was not edited afterwards, not that it is true.
 - Shipment and delivery records created by the demo agent are synthetic (`data_origin: synthetic_demo`).
-- For unauthorized-payment disputes the current payload shows fulfillment. It does not show that the buyer authorized the purchase, and the trail is not yet sent to PayPal.
+- The current sandbox ingestion path does not produce a trusted buyer-authorization record. UNAUTHORISED disputes therefore abstain, and a fulfillment-only legacy draft is blocked from submission. The purchase trail is not sent to PayPal and does not establish who authorized a payment.
 - On one sandbox dispute the buyer's case page showed a different ID than the seller API returned. The seller API answers 403 for the buyer-page ID. The cause is unknown.
 - The accept-claim path is not built. The webhook receiver is written and unit-tested but has not been run against a live PayPal delivery (it needs a public URL); the poller is the working path.
 - Model spend is tracked by a client-side guard. It is a local cap, not a provider-side limit.

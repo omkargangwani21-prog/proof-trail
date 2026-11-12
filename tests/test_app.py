@@ -789,6 +789,46 @@ def test_unauthorised_workspace_shows_requested_evidence_trail_limits_and_payloa
     assert "This payload proves fulfillment." not in response.text
     assert "Buyer approved" not in response.text
     assert "approval" not in response.text.lower()
+    assert "Not enough evidence to contest" in response.text
+    assert "No trusted buyer-authorization record is available" in response.text
+    assert "Submission blocked" in response.text
+
+
+def test_legacy_unauthorised_draft_is_blocked_before_approval_or_submission(tmp_path, monkeypatch):
+    client = make(tmp_path, monkeypatch)
+    monkeypatch.setenv("PT_SUBMIT_MODE", "sandbox-submit")
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    dispute = seed_dispute(conn)
+    conn.execute("UPDATE disputes SET reason='UNAUTHORISED' WHERE paypal_dispute_id=?", (dispute["dispute_id"],))
+    did = conn.execute("SELECT id FROM disputes WHERE paypal_dispute_id=?", (dispute["dispute_id"],)).fetchone()["id"]
+    case_id = conn.execute("INSERT INTO cases(dispute_id,built_at,bundle_hash) VALUES(?,?,?)",
+                           (did, "2026-11-12", "legacy-unauthorized" )).lastrowid
+    verification = {"decision": "CONTEST", "claims": [{
+        "claim": {"type": "fulfillment", "source_refs": [{"record_id": "shp:old"}]},
+        "verdict": "VERIFIED",
+    }]}
+    draft_id = conn.execute(
+        "INSERT INTO draft_evidence(case_id,paypal_dispute_id,decision,payload_json,verification_json,status,created_at) "
+        "VALUES(?,?,?,?,?,?,?)",
+        (case_id, dispute["dispute_id"], "CONTEST",
+         json.dumps([{"evidence_type": "PROOF_OF_FULFILLMENT", "notes": "delivered"}]),
+         json.dumps(verification), "VERIFIED", "2026-11-12"),
+    ).lastrowid
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr("app.main.PayPalClient", lambda: pytest.fail("PayPal client must not be constructed"))
+    response = client.post(f"/disputes/{dispute['dispute_id']}/submit",
+                           data={"draft_id": draft_id, "approved": "yes"}, follow_redirects=False)
+    assert response.status_code == 303
+    blocked = client.get(response.headers["location"])
+    assert "trusted buyer-authorization record" in blocked.text
+    assert "Submission is blocked" in blocked.text
+    conn = connect(str(tmp_path / "t.db"))
+    assert conn.execute("SELECT COUNT(*) FROM approvals WHERE draft_id=?", (draft_id,)).fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM submissions WHERE draft_id=?", (draft_id,)).fetchone()[0] == 0
+    conn.close()
 
 
 def test_eval_reads_dynamic_runs_and_keeps_model_panel_and_flag_labels_separate(tmp_path, monkeypatch):

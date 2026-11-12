@@ -21,11 +21,13 @@ def key(monkeypatch):
     monkeypatch.setenv("TRAIL_HMAC_KEY", "test-key-not-a-secret")
 
 
-def run(required):
+def run(required, reason=None, include_authorization=False):
     c = connect(":memory:")
     demo_agent.start_purchase(c, FakeClient(), "buy a desk lamp under 60 dollars")
     demo_agent.finish_purchase(c, FakeClient(), "ord:1")
     d = json.load(open("dispute_sample.json"))
+    if reason:
+        d["reason"] = reason
     for t in d["disputed_transactions"]:
         t["seller_transaction_id"] = "CAP1"
     d["evidences"] = [{"evidence_type": e, "source": "REQUESTED_FROM_SELLER"} for e in required]
@@ -36,7 +38,17 @@ def run(required):
                   type="fulfillment", confidence=1.0,
                   source_refs=[SourceRef(record_id=shp["record_id"], field="carrier", quoted_value=ct["carrier"]),
                                SourceRef(record_id=shp["record_id"], field="tracking_number", quoted_value=ct["tracking_number"])])
-    draft = Draft(decision="CONTEST", rationale="shipped", claims=[claim], missing_evidence=[])
+    claims = [claim]
+    if include_authorization:
+        auth_record = {"record_id": "auth:1", "kind": "authorization", "untrusted": False,
+                       "content": {"authorization_status": "AUTHORIZED", "method": "3DS"}}
+        b["records"].append(auth_record)
+        claims.append(Claim(
+            claim_id="c-auth", text="The authorization record marks the purchase as authorized.",
+            type="authorization", confidence=1.0,
+            source_refs=[SourceRef(record_id="auth:1", field="authorization_status", quoted_value="AUTHORIZED")],
+        ))
+    draft = Draft(decision="CONTEST", rationale="shipped", claims=claims, missing_evidence=[])
     return verify(b, draft, judge=lambda text, cited: True)
 
 
@@ -55,3 +67,18 @@ def test_no_gating_type_listed_stays_strict():
     r = run(["PROOF_OF_REFUND"])
     assert r["missing_evidence"] == ["PROOF_OF_REFUND"] and r["requested_not_provided"] == []
     assert r["decision"] == "ABSTAIN"
+
+
+def test_unauthorised_dispute_abstains_without_trusted_authorization_record():
+    r = run(["PROOF_OF_FULFILLMENT"], reason="UNAUTHORISED")
+    assert r["claims"][0]["verdict"] == "VERIFIED"
+    assert r["missing_evidence"] == []
+    assert r["authorization_missing"] is True
+    assert r["decision"] == "ABSTAIN"
+
+
+def test_unauthorised_dispute_can_contest_with_verified_trusted_authorization_record():
+    r = run(["PROOF_OF_FULFILLMENT"], reason="UNAUTHORIZED", include_authorization=True)
+    assert r["authorization_missing"] is False
+    assert r["decision"] == "CONTEST"
+    assert [item["verdict"] for item in r["claims"]] == ["VERIFIED", "VERIFIED"]

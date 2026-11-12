@@ -168,6 +168,7 @@ def draft_state(draft):
 DECISION_REASON_TAGS = {
     "consistency": "records conflict",
     "missing_evidence": "evidence missing",
+    "authorization_gap": "buyer authorization missing",
     "model_abstained": "model abstained",
     "model_recommended_accept": "model recommended accept",
 }
@@ -192,6 +193,9 @@ def decision_reason_lines(verification, missing_labels):
         elif reason == "missing_evidence":
             missing = ", ".join(missing_labels) if missing_labels else "not specified"
             lines.append({"text": f"Required evidence is missing: {missing}.", "issues": []})
+        elif reason == "authorization_gap":
+            lines.append({"text": "No trusted buyer-authorization record is available, so ProofTrail did not contest this dispute.",
+                          "issues": []})
         elif reason == "model_abstained":
             lines.append({"text": "The model chose not to contest.", "issues": []})
         elif reason == "model_recommended_accept":
@@ -354,6 +358,18 @@ def source_records(conn, case_id):
     return records
 
 
+def has_trusted_authorization_claim(verification, records):
+    for item in (verification or {}).get("claims", []):
+        claim = item.get("claim", {})
+        if item.get("verdict") != "VERIFIED" or claim.get("type") != "authorization":
+            continue
+        for ref in claim.get("source_refs", []):
+            record = records.get(ref.get("record_id"))
+            if record and record.get("kind") == "authorization" and not record.get("untrusted"):
+                return True
+    return False
+
+
 def workspace_context(request, conn, dispute, draft, fixture_data=None):
     if fixture_data:
         d = fixture_data["dispute"]
@@ -430,10 +446,15 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
     can_redraft = not replay_mode and d.get("status") == "WAITING_FOR_SELLER_RESPONSE" and has_draft and not submitted
     missing = (verification or {}).get("missing_evidence", [])
     missing_labels = [evidence_type_label(item) for item in missing]
+    authorization_missing = (str(d.get("reason", "")).upper() in {"UNAUTHORISED", "UNAUTHORIZED"}
+                             and not has_trusted_authorization_claim(verification, records))
     requested_not_provided = [evidence_type_label(item) for item in (verification or {}).get("requested_not_provided", [])]
     consistency = (verification or {}).get("consistency_issues", [])
     reasons = (verification or {}).get("recommendation")
     decision_reasons = decision_reason_lines(verification, missing_labels) if verification and verification.get("decision") != "CONTEST" else []
+    if authorization_missing and not any(reason == "authorization_gap" for reason in (verification or {}).get("decision_reasons", [])):
+        decision_reasons.append({"text": "No trusted buyer-authorization record is available, so ProofTrail did not contest this dispute.",
+                                 "issues": []})
     rationale = (verification or {}).get("rationale")
     rationale_limit = 240
     is_sample = d.get("origin") == "synthetic_sample"
@@ -448,7 +469,8 @@ def workspace_context(request, conn, dispute, draft, fixture_data=None):
         "missing_labels": missing_labels, "can_draft": can_draft, "can_redraft": can_redraft,
         "decision_reasons": decision_reasons,
         "decision_reason_not_recorded": bool(verification and verification.get("decision") != "CONTEST"
-                                               and not verification.get("decision_reasons")),
+                                               and not verification.get("decision_reasons") and not authorization_missing),
+        "authorization_missing": authorization_missing,
         "rationale": rationale, "rationale_preview": rationale[:rationale_limit] if rationale else None,
         "rationale_truncated": bool(rationale and len(rationale) > rationale_limit),
         "consistency": consistency, "recommendation": reasons,
@@ -553,7 +575,7 @@ async def submit_dry_run(request: Request, pid: str, draft_id: int = Form(...), 
     dry_run = configured_submit_mode() == "dry-run"
     conn = open_db()
     try:
-        dispute = conn.execute("SELECT origin FROM disputes WHERE paypal_dispute_id=?", (pid,)).fetchone()
+        dispute = conn.execute("SELECT origin,reason FROM disputes WHERE paypal_dispute_id=?", (pid,)).fetchone()
         if not dispute:
             return RedirectResponse(f"/disputes/{pid}?error=Dispute+not+found.", status_code=303)
         # Generated samples must never reach PayPal, regardless of environment configuration.
@@ -562,10 +584,18 @@ async def submit_dry_run(request: Request, pid: str, draft_id: int = Form(...), 
         if approved != "yes":
             message = "Approval is required before a dry run." if dry_run else "Approval is required before sandbox submission."
             return RedirectResponse(f"/disputes/{pid}?error={message.replace(' ', '+')}", status_code=303)
-        row = conn.execute("SELECT id,paypal_dispute_id,status FROM draft_evidence WHERE id=? AND paypal_dispute_id=?",
+        row = conn.execute("SELECT id,paypal_dispute_id,status,case_id,verification_json FROM draft_evidence WHERE id=? AND paypal_dispute_id=?",
                            (draft_id, pid)).fetchone()
         if not row:
             return RedirectResponse(f"/disputes/{pid}?error=This+draft+is+no+longer+available.", status_code=303)
+        if str(dispute["reason"] or "").upper() in {"UNAUTHORISED", "UNAUTHORIZED"}:
+            try:
+                verification = json.loads(row["verification_json"] or "{}")
+            except (TypeError, ValueError):
+                verification = {}
+            if not has_trusted_authorization_claim(verification, source_records(conn, row["case_id"])):
+                message = "This unauthorized-payment draft lacks a trusted buyer-authorization record. Submission is blocked."
+                return RedirectResponse(f"/disputes/{pid}?error={quote(message)}", status_code=303)
         if row["status"] in SUBMITTED_STATUSES:
             return RedirectResponse(f"/disputes/{pid}?error=This+draft+has+already+been+submitted.", status_code=303)
         approve(conn, draft_id, actor="merchant", note="Approved from ProofTrail dry-run dialog" if dry_run else "Approved from ProofTrail sandbox submission dialog")

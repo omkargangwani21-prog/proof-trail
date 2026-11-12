@@ -135,3 +135,8 @@
 - Before: only factual claims whose every source was buyer text were capped; a claim of type "other", or one citing the buyer message plus a trusted record, could reach VERIFIED and into the payload notes. On the test split, GLM's verified system had flagged runs citing the buyer message.
 - Measured on the DEV split (draft once, verify both ways with the same judge; scripts/measure_untrusted_cap.py): DeepSeek-V4-Flash, 78 runs: 0 VERIFIED claims cited buyer text under the old rule, so no change (48 contests both ways). GLM-5.3-Flash, 61 usable runs: 1 VERIFIED claim cited buyer text ("The buyer message on file states ..."); with the cap, VERIFIED claims 212 -> 211, contests 38 -> 38, 0 contests lost. Data: eval/results/dev-cap-GLM-5.3-Flash/runs.json.
 - Decision: cap on by default. The published test-split results were produced with it off and are unchanged; untrusted_cap=False reproduces them. Small samples on the dev split, not the test split.
+
+## 2026-11-12: require trusted authorization evidence for unauthorized-payment disputes
+- A verified fulfillment claim establishes shipment details, not who authorized the purchase. For `UNAUTHORISED` / `UNAUTHORIZED` reasons, the verifier now abstains unless a VERIFIED `authorization` claim cites a trusted `authorization` source record.
+- The PayPal case builder currently does not produce authorization records. This intentionally blocks these disputes from contesting with delivery evidence alone. Older saved drafts are also blocked at the submit route.
+- This post-test safety rule was not included in the frozen evaluation; results are unchanged and do not measure it.

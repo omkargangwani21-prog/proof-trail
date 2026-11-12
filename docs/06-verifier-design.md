@@ -28,10 +28,11 @@ flowchart LR
 
 ## 4. Decision rule
 1. `required_evidence` is read from the dispute's own `evidences` entries marked `REQUESTED_FROM_SELLER` (checked against real sandbox disputes), not derived from the reason code.
-2. If `PROOF_OF_FULFILLMENT` is requested and no VERIFIED `fulfillment` claim cites a shipment record that satisfies the shipped predicate (tracking number, `shipped_at`, status IN_TRANSIT / OUT_FOR_DELIVERY / DELIVERED) → decision `ABSTAIN` with recommendation "Accept claim" and a list of what is missing. Any consistency issue (date order, amounts), or an `ABSTAIN` from the drafter, also forces `ABSTAIN`.
+2. If `PROOF_OF_FULFILLMENT` is requested and no VERIFIED `fulfillment` claim cites a shipment record that satisfies the shipped predicate (tracking number, `shipped_at`, status IN_TRANSIT / OUT_FOR_DELIVERY / DELIVERED) → decision `ABSTAIN` with a list of what is missing. Any consistency issue (date order, amounts), or an `ABSTAIN` from the drafter, also forces `ABSTAIN`.
    Other requested types (for example `PROOF_OF_REFUND`, `OTHER`) do not gate a contest; unmet ones are reported as `requested_not_provided`. If PayPal lists no gating type at all, every requested type must be satisfied. This gating rule was changed after the frozen test run (see DECISIONS.md, 2026-11-07); for the synthetic cases, which request only `PROOF_OF_FULFILLMENT`, behaviour is identical.
-3. Else `CONTEST` with VERIFIED claims only.
-4. A human can override NEEDS_REVIEW claims, with a note. Overrides are logged and counted in eval.
+3. For an `UNAUTHORISED` / `UNAUTHORIZED` dispute, a VERIFIED `authorization` claim must cite a trusted `authorization` source record. Without one, decision is `ABSTAIN`, even when fulfillment is verified. Current PayPal ingestion does not create this source type, so these disputes cannot currently be contested.
+4. Else `CONTEST` with VERIFIED claims only.
+5. A human can override NEEDS_REVIEW claims, with a note. Overrides are logged and counted in eval.
 
 Abstention is a feature: a wrong confident submission costs more than a declined contest.
 

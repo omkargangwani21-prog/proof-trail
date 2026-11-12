@@ -67,6 +67,8 @@ def decision_reasons(v):
     out = []
     if v.get("consistency_issues"):
         out.append("consistency")
+    if v.get("authorization_missing"):
+        out.append("authorization_gap")
     if v.get("missing_evidence"):
         out.append("missing_evidence")
     if v.get("drafter_decision") == "ABSTAIN":
@@ -82,6 +84,7 @@ def save_draft(conn, bundle, verification):
     ver = {"decision": verification["decision"], "recommendation": verification["recommendation"],
            "missing_evidence": verification["missing_evidence"], "l3_ran": verification["l3_ran"],
            "consistency_issues": verification.get("consistency_issues", []),
+           "authorization_missing": verification.get("authorization_missing", False),
            "requested_not_provided": verification.get("requested_not_provided", []),
            "drafter_decision": verification.get("drafter_decision"), "rationale": verification.get("rationale"),
            "decision_reasons": decision_reasons(verification),

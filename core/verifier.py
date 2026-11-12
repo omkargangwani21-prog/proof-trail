@@ -14,6 +14,7 @@ GATING = ("PROOF_OF_FULFILLMENT",)
 # The published eval results were produced with this off; verify(..., untrusted_cap=False) reproduces them.
 UNTRUSTED_CAP = True
 FACTUAL = {"fulfillment", "authorization", "policy", "history"}
+UNAUTHORISED_REASONS = {"UNAUTHORISED", "UNAUTHORIZED"}
 CARRIERS = ("ups", "fedex", "usps", "dhl")
 DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
 AMOUNT = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?|\b\d+\.\d{2}\b")
@@ -123,6 +124,13 @@ def verify(bundle, draft, judge=None, untrusted_cap=None):
         out.append({"claim": c, "verdict": v, "reasons": why})
 
     verified = [x["claim"] for x in out if x["verdict"] == "VERIFIED"]
+    reason = str(bundle.get("dispute", {}).get("content", {}).get("reason", "")).upper()
+    authorization_missing = reason in UNAUTHORISED_REASONS and not any(
+        item["verdict"] == "VERIFIED" and item["claim"].type == "authorization" and
+        any((record := recs.get(ref.record_id)) is not None and record["kind"] == "authorization"
+            and not record["untrusted"] for ref in item["claim"].source_refs)
+        for item in out
+    )
     issues = consistency_issues(bundle)
     missing, not_provided = [], []
     required = list(bundle["required_evidence"])
@@ -135,13 +143,14 @@ def verify(bundle, draft, judge=None, untrusted_cap=None):
             (missing if ev in gate else not_provided).append(ev)
     if draft.decision == "ACCEPT":
         decision = "ACCEPT"
-    elif draft.decision == "ABSTAIN" or missing or issues:
+    elif draft.decision == "ABSTAIN" or missing or issues or authorization_missing:
         decision = "ABSTAIN"
     else:
         decision = "CONTEST"
     return {"decision": decision,
             "recommendation": {"ACCEPT": "Accept the claim", "ABSTAIN": "Do not contest on this evidence"}.get(decision, "Contest with the verified claims"),
             "claims": out, "missing_evidence": missing, "requested_not_provided": not_provided, "consistency_issues": issues,
+            "authorization_missing": authorization_missing,
             "l3_ran": judge is not None}
 
 
