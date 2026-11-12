@@ -70,7 +70,7 @@ To browse the synthetic queue, a reviewed draft, the trail, and the sample evalu
 bash scripts/replay-demo.sh
 ```
 
-Replay mode uses UI fixtures and a temporary SQLite file outside the repository. The app blocks model drafting, PayPal fetch, poll refresh, webhook and live submission requests; the demo cannot send evidence to PayPal. The sample figures and cases are for demonstration only.
+Replay mode loads synthetic dev cases and a fixed, precomputed draft into a temporary SQLite file outside the repository. The dispute queue, workspace, citations, payload download, approval, and dry run use the app’s database path; Trail and Eval use labeled display fixtures. The app blocks model drafting, PayPal fetch, poll refresh, and webhook requests. Submitting a synthetic sample can only record a local dry run. Sample figures and cases are for demonstration only.
 
 Environment switches for the app: `PT_DB` (database path), `PT_SUBMIT_MODE` (`dry-run` is the default; `sandbox-submit` sends evidence to the PayPal sandbox).
 

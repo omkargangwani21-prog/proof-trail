@@ -276,14 +276,14 @@ def draft_feedback(request, queue=False):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    return RedirectResponse("/disputes?fixture=queue" if os.environ.get("PT_MODE") == "replay" else "/disputes")
+    return RedirectResponse("/disputes")
 
 
 @app.get("/disputes", response_class=HTMLResponse)
 async def disputes(request: Request, fixture: str | None = None, filter: str = "all"):
     if filter not in {"all", "sandbox", "samples"}:
         filter = "all"
-    use_fixture = FIXTURES_ENABLED and (fixture == "queue" or os.environ.get("PT_MODE") == "replay")
+    use_fixture = FIXTURES_ENABLED and fixture == "queue" and os.environ.get("PT_MODE") != "replay"
     if FIXTURES_ENABLED and fixture == "loading":
         ctx = common(None, "disputes", True) | {"state": "loading", "action": [], "other": [], "queue_filter": filter}
         return templates.TemplateResponse(request, "queue.html", ctx)

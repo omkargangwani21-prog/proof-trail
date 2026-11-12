@@ -916,32 +916,72 @@ def test_replay_mode_blocks_model_and_paypal_routes(tmp_path, monkeypatch):
     assert calls == []
 
 
+def test_replay_seed_refuses_the_project_database(monkeypatch):
+    from scripts.replay_seed import seed_replay
+    monkeypatch.setenv("PT_DB", "data/prooftrail.db")
+    with pytest.raises(RuntimeError, match="separate replay database"):
+        seed_replay()
+
+
 def test_replay_mode_opens_synthetic_walkthrough_without_external_keys(tmp_path, monkeypatch):
     monkeypatch.setenv("PT_MODE", "replay")
     monkeypatch.setattr("app.main.FIXTURES_ENABLED", True)
     client = make(tmp_path, monkeypatch)
+    from scripts.replay_seed import seed_replay
+    pid = seed_replay()
 
     home = client.get("/", follow_redirects=False)
     queue = client.get("/disputes")
-    workspace = client.get("/disputes/PP-DEV-1001?fixture=verified")
+    workspace = client.get(f"/disputes/{pid}")
     trail_page = client.get("/trail")
     eval_page = client.get("/eval")
     settings = client.get("/settings")
 
-    assert home.headers["location"] == "/disputes?fixture=queue"
+    assert home.headers["location"] == "/disputes"
     assert "Offline replay" in queue.text
-    assert "/disputes/PP-DEV-1001?fixture=verified" in queue.text
-    assert "/disputes/PP-DEV-1002?fixture=abstain" in queue.text
-    assert "VERIFIED" in workspace.text and "Draft again" not in workspace.text
+    assert pid in queue.text and "Synthetic sample" in queue.text and "Draft ready" in queue.text
+    assert "VERIFIED" in workspace.text and "Download payload JSON" in workspace.text
+    assert "Draft again" not in workspace.text
+    assert "Synthetic replay case. The draft and verdicts are precomputed" in workspace.text
     assert "DEMO-TRAIL-001" in trail_page.text
     assert "Synthetic data. 95% intervals are case-level cluster bootstrap." in eval_page.text
     assert "Replay" in settings.text
-    assert "Drafting is disabled" not in workspace.text
 
-    blocked = client.post("/disputes/PP-DEV-1001/draft", follow_redirects=False)
-    assert blocked.headers["location"] == "/disputes/PP-DEV-1001?draft=replay"
+    blocked = client.post(f"/disputes/{pid}/draft", follow_redirects=False)
+    assert blocked.headers["location"] == f"/disputes/{pid}?draft=replay"
     after = client.get(blocked.headers["location"])
     assert "Replay mode is offline" in after.text
+
+    from core.db import connect
+    conn = connect(str(tmp_path / "t.db"))
+    draft_id = conn.execute("SELECT id FROM draft_evidence WHERE paypal_dispute_id=?", (pid,)).fetchone()["id"]
+    payload_response = client.get(f"/disputes/{pid}/payload.json?draft_id={draft_id}")
+    assert payload_response.status_code == 200
+    assert '"evidence_type": "PROOF_OF_FULFILLMENT"' in payload_response.text
+    conn.close()
+    submitted = []
+
+    class FakePayPal:
+        def provide_evidence(self, dispute_id, evidences, dry_run=True):
+            submitted.append((dispute_id, evidences, dry_run))
+            return {"dry_run": True}
+
+    monkeypatch.setattr("app.main.PayPalClient", FakePayPal)
+    result = client.post(f"/disputes/{pid}/submit", data={"draft_id": draft_id, "approved": "yes"},
+                         follow_redirects=False)
+    assert result.status_code == 303
+    assert submitted and submitted[0][2] is True
+    conn = connect(str(tmp_path / "t.db"))
+    assert conn.execute("SELECT mode FROM submissions WHERE draft_id=?", (draft_id,)).fetchone()["mode"] == "dry_run"
+    assert conn.execute("SELECT status FROM draft_evidence WHERE id=?", (draft_id,)).fetchone()["status"] == "SUBMITTED_DRY_RUN"
+    assert conn.execute("SELECT action FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()["action"] == "submitted_dry_run"
+    conn.close()
+
+    assert seed_replay() == pid
+    conn = connect(str(tmp_path / "t.db"))
+    assert conn.execute("SELECT COUNT(*) FROM draft_evidence WHERE paypal_dispute_id=?", (pid,)).fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM disputes WHERE origin='synthetic_sample'").fetchone()[0] == 8
+    conn.close()
 
 
 def test_default_verifier_cap_sends_any_buyer_text_citation_to_review():

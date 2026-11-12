@@ -25,6 +25,7 @@ dialog{padding:0;color:var(--ink);background:var(--surface);border:1px solid var
 {% endblock %}
 {% block content %}
 <a class="back-link" href="/disputes">{{ icon("arrow") }}Back to disputes</a>
+{% if mode == "replay" %}<p class="message message--partial" role="note">Synthetic replay case. The draft and verdicts are precomputed; no model or independent judge service was called.</p>{% endif %}
 {% if state == "loading" %}
 <header class="case-head"><div class="loading-line" style="width:47%;height:25px"></div><div class="loading-line" style="width:70%;height:13px;margin-top:12px"></div></header><div class="workspace" aria-live="polite"><section><h2>Case timeline</h2><div class="loading-block"><div class="loading-line" style="width:72%"></div></div><div class="loading-block"><div class="loading-line" style="width:54%"></div></div></section><section><h2>Evidence draft</h2><div class="loading-block"><div class="loading-line" style="width:83%"></div></div><div class="loading-block"><div class="loading-line" style="width:67%"></div></div></section></div><p role="status" class="muted">Loading this dispute…</p>
 {% elif state == "error" %}
