@@ -10,8 +10,9 @@ def _shipped(c):
 REQUIRED_MAP = {"PROOF_OF_FULFILLMENT": ("fulfillment", "shipment", _shipped)}
 # Only these gate a CONTEST. Other types PayPal lists are reported as requested_not_provided.
 GATING = ("PROOF_OF_FULFILLMENT",)
-# After the test split was frozen: a claim citing ANY buyer-written record goes to NEEDS_REVIEW. Off by default until measured.
-UNTRUSTED_CAP = False
+# Added after the test split was frozen: a claim citing ANY buyer-written record goes to NEEDS_REVIEW.
+# The published eval results were produced with this off; verify(..., untrusted_cap=False) reproduces them.
+UNTRUSTED_CAP = True
 FACTUAL = {"fulfillment", "authorization", "policy", "history"}
 CARRIERS = ("ups", "fedex", "usps", "dhl")
 DATE = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)")
