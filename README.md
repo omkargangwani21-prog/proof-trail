@@ -43,7 +43,7 @@ Full tables with 95% intervals: [`docs/results.md`](docs/results.md), generated 
 
 ## Setup
 
-Python 3.12 or newer. GitHub Actions runs the suite on Python 3.12; local development has been tested on Python 3.14. Nothing here touches live PayPal.
+Python 3.12 or newer. GitHub Actions runs the suite on Python 3.12 and 3.14. Nothing here touches live PayPal.
 
 ```bash
 git clone <this repository> && cd proof-trail
